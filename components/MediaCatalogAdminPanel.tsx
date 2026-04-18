@@ -1095,24 +1095,27 @@ const MediaCatalogAdminPanel: React.FC<MediaCatalogAdminPanelProps> = ({ session
               这里就是按尺寸单独映射：`1K -&gt; 模型 / 点数`、`2K -&gt; 模型 / 点数`、`4K -&gt; 模型 / 点数`。留空时会回退到上面的默认 `upstreamModel` 和默认点数。
             </HelpText>
           </div>
-          <div className="mb-3 hidden rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-xs text-emerald-50/85 sm:grid sm:grid-cols-[160px_minmax(0,1fr)_140px]">
-            <div>尺寸映射</div>
-            <div>调用模型</div>
-            <div>消耗点数</div>
-          </div>
           <div className="space-y-3">
             {([
               { key: '1k', label: '1K', modelField: 'size1kUpstreamModel', costField: 'size1kPointCost' },
               { key: '2k', label: '2K', modelField: 'size2kUpstreamModel', costField: 'size2kPointCost' },
               { key: '4k', label: '4K', modelField: 'size4kUpstreamModel', costField: 'size4kPointCost' },
             ] as const).map((item) => (
-              <div key={item.key} className="grid gap-3 rounded-2xl border border-white/10 bg-black/10 p-3 sm:grid-cols-[160px_minmax(0,1fr)_140px] sm:items-center">
-                <div className="flex items-center gap-2 text-sm font-medium text-emerald-100">
+              <div key={item.key} className="rounded-2xl border border-white/10 bg-black/10 p-3">
+                <div className="mb-3 flex items-center gap-2 text-sm font-medium text-emerald-100">
                   <SectionPill className="justify-center border-emerald-400/30 bg-emerald-400/10 text-emerald-100">{item.label}</SectionPill>
                   <span className="text-emerald-50/80">{item.label} -&gt; 模型 / 点数</span>
                 </div>
-                <Input value={String(imageRouteForm[item.modelField] || '')} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, [item.modelField]: e.target.value }))} placeholder={`${item.label} 调用模型，例如 nano-banana-pro-${item.key === '1k' ? '' : item.key}`.replace(/-$/, '')} />
-                <Input type="number" value={String(Number(imageRouteForm[item.costField] || 0))} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, [item.costField]: Number(e.target.value || 0) }))} placeholder={`${item.label} 消耗点数`} />
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_140px]">
+                  <div>
+                    <div className="mb-1 text-xs text-emerald-50/70">调用模型</div>
+                    <Input value={String(imageRouteForm[item.modelField] || '')} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, [item.modelField]: e.target.value }))} placeholder={`${item.label} 调用模型，例如 nano-banana-pro-${item.key === '1k' ? '' : item.key}`.replace(/-$/, '')} />
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs text-emerald-50/70">消耗点数</div>
+                    <Input type="number" value={String(Number(imageRouteForm[item.costField] || 0))} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, [item.costField]: Number(e.target.value || 0) }))} placeholder={`${item.label} 消耗点数`} />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
