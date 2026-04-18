@@ -194,6 +194,21 @@ const allowsDirectUserApiKeyRoute = (route) => {
 const shouldUseUserProvidedApiKey = (route, fallbackAuthorization) =>
   allowsDirectUserApiKeyRoute(route) &&
   Boolean(normalizeAuthorization(fallbackAuthorization));
+const toPublicImageRouteSizeOverrides = (overrides) => {
+  if (!overrides || typeof overrides !== "object") {
+    return {};
+  }
+
+  return Object.entries(overrides).reduce((accumulator, [rawKey, rawValue]) => {
+    const key = String(rawKey || "").trim().toLowerCase();
+    const pointCost = Number(rawValue?.pointCost ?? "");
+    if (!["1k", "2k", "4k"].includes(key) || !Number.isFinite(pointCost) || pointCost < 0) {
+      return accumulator;
+    }
+    accumulator[key] = { pointCost };
+    return accumulator;
+  }, {});
+};
 const toPublicImageRoute = (route = {}) => ({
   id: String(route.id || "").trim(),
   label: String(route.label || "").trim(),
@@ -203,6 +218,7 @@ const toPublicImageRoute = (route = {}) => ({
   mode: String(route.mode || "async").trim(),
   allowUserApiKeyWithoutLogin: route.allowUserApiKeyWithoutLogin === true,
   pointCost: Number(route.pointCost || 0),
+  sizeOverrides: toPublicImageRouteSizeOverrides(route.sizeOverrides),
   sortOrder: Number(route.sortOrder || 0),
   isActive: route.isActive !== false,
   isDefaultRoute: route.isDefaultRoute === true,

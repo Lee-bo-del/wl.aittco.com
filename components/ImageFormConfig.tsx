@@ -15,6 +15,7 @@ import {
 } from '../src/config/imageModels';
 import {
   canUseDirectUserApiKeyForImageModel,
+  getImageRoutePointCost,
   getImageRouteOptions,
   getImageRoutesByModelFamily,
 } from '../src/config/imageRoutes';
@@ -140,12 +141,31 @@ export const ImageFormConfig: React.FC<ImageFormConfigProps> = ({
         ? 'grid-cols-2 gap-2'
         : 'grid-cols-3 gap-2';
 
-  const modelOptions = visibleImageModels.map((model) => ({
-    value: model.id,
-    label: model.label,
-    cost: model.selectorCost,
-    icon: <ImageModelIcon iconKind={model.iconKind} variant="selector" />,
-  }));
+  const modelOptions = useMemo(
+    () =>
+      visibleImageModels.map((model) => {
+        const familyRoutes = getImageRoutesByModelFamily(model.routeFamily).filter((route) =>
+          restrictToDirectKeyCompatible ? route.allowUserApiKeyWithoutLogin === true : true,
+        );
+        const displayRoute =
+          familyRoutes.find((route) => route.line === imageLine) ||
+          familyRoutes.find((route) => route.isDefaultRoute) ||
+          familyRoutes.find((route) => route.isDefaultNanoBananaLine) ||
+          familyRoutes[0];
+        const modelSize = getNormalizedImageSizeForModel(model.id, imageSize);
+        const displayCost = displayRoute
+          ? getImageRoutePointCost(displayRoute, modelSize)
+          : model.selectorCost;
+
+        return {
+          value: model.id,
+          label: model.label,
+          cost: displayCost,
+          icon: <ImageModelIcon iconKind={model.iconKind} variant="selector" />,
+        };
+      }),
+    [imageLine, imageSize, restrictToDirectKeyCompatible, visibleImageModels],
+  );
 
   if (visibleImageModels.length === 0) {
     return (

@@ -1,7 +1,7 @@
 (() => {
   const API_BASE_URL =
     typeof window !== "undefined" && window.location.hostname === "localhost"
-      ? "http://localhost:3325/api"
+      ? "http://localhost:3355/api"
       : "/api";
   const AUTH_SESSION_STORAGE_KEY = "auth-session-v1";
   const CLASSIC_AUTH_MODE_KEY = "classic-auth-mode";
@@ -261,6 +261,27 @@
     isDefaultModel: raw.isDefaultModel === true,
     sortOrder: Number(raw.sortOrder || 0),
   });
+  const normalizeSizeKey = (value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ["1k", "2k", "4k"].includes(normalized) ? normalized : "";
+  };
+  const normalizeSizeOverrides = (overrides) => {
+    const next = {};
+    if (!overrides || typeof overrides !== "object") {
+      return next;
+    }
+
+    Object.entries(overrides).forEach(([rawKey, rawValue]) => {
+      const key = normalizeSizeKey(rawKey);
+      const pointCost = Number(rawValue?.pointCost ?? "");
+      if (!key || !Number.isFinite(pointCost) || pointCost < 0) {
+        return;
+      }
+      next[key] = { pointCost };
+    });
+
+    return next;
+  };
   const normalizeRoute = (raw = {}) => ({
     id: String(raw.id || "").trim(),
     label: String(raw.label || raw.id || "Route").trim(),
@@ -269,6 +290,7 @@
     transport: String(raw.transport || "openai-image").trim(),
     mode: String(raw.mode || "async").trim(),
     pointCost: Number(raw.pointCost || 0),
+    sizeOverrides: normalizeSizeOverrides(raw.sizeOverrides),
     isActive: raw.isActive !== false,
     isDefaultRoute: raw.isDefaultRoute === true,
     isDefaultNanoBananaLine: raw.isDefaultNanoBananaLine === true,
@@ -362,6 +384,28 @@
         : [model?.defaultSize || "1k"];
     return options.includes(selectedValue) ? selectedValue : options[0];
   };
+  const getRoutePointCost = (route, size) => {
+    const normalizedSize = normalizeSizeKey(size);
+    const overridePointCost = normalizedSize
+      ? Number(route?.sizeOverrides?.[normalizedSize]?.pointCost ?? "")
+      : Number.NaN;
+    if (Number.isFinite(overridePointCost) && overridePointCost >= 0) {
+      return overridePointCost;
+    }
+    return Number(route?.pointCost || 0);
+  };
+  const getDisplayRouteForModel = (modelId, preferredLine = "") => {
+    const routes = getRoutesForModel(modelId).filter((route) =>
+      isApiKeyCompatibilityMode() ? route.allowUserApiKeyWithoutLogin === true : true,
+    );
+    if (routes.length === 0) return null;
+    return (
+      routes.find((route) => route.line === String(preferredLine || "").trim()) ||
+      routes.find((route) => route.isDefaultRoute) ||
+      routes.find((route) => route.isDefaultNanoBananaLine) ||
+      routes[0]
+    );
+  };
   const renderModelMenu = () => {
     const pill = document.getElementById("modelPill");
     if (!pill) return;
@@ -369,6 +413,8 @@
     if (!menu) return;
 
     const models = getVisibleModels();
+    const selectedSize = getCurrentSelectedSize();
+    const preferredLine = String(localStorage.getItem(LINE_STORAGE_KEY) || "").trim();
     if (models.length === 0) {
       menu.innerHTML = '<div class="dropdown-item active" data-value=""><span>暂无可用模型</span></div>';
       pill.setAttribute("data-selected-value", "");
@@ -385,7 +431,10 @@
     const selected = getCurrentModel();
     menu.innerHTML = models
       .map((model) => {
-        const costLabel = formatCoinLabel(model.selectorCost);
+        const displayRoute = getDisplayRouteForModel(model.id, preferredLine);
+        const costLabel = formatCoinLabel(
+          displayRoute ? getRoutePointCost(displayRoute, selectedSize) : model.selectorCost,
+        );
         const icon = MODEL_ICONS[model.iconKind] || "";
         const activeClass = selected?.id === model.id ? " active" : "";
         return `
@@ -405,7 +454,10 @@
       triggerLabel.innerText = selected ? `${icon ? `${icon} ` : ""}${selected.label}` : "暂无可用模型";
     }
     if (triggerVal) {
-      const selectedCost = formatCoinLabel(selected?.selectorCost || 0);
+      const selectedRoute = selected ? getDisplayRouteForModel(selected.id, preferredLine) : null;
+      const selectedCost = formatCoinLabel(
+        selectedRoute ? getRoutePointCost(selectedRoute, selectedSize) : selected?.selectorCost || 0,
+      );
       triggerVal.innerText = selectedCost;
       triggerVal.style.display = selectedCost ? "inline" : "none";
     }
@@ -723,6 +775,7 @@
     updateBrandHeader();
     updateLegacyAdminVisibility();
   };
+  window.refreshClassicCatalogUi = renderCatalogUi;
   const loadClassicCatalogs = async () => {
     const [modelsData, routesData] = await Promise.all([
       fetchJson("/image-models/catalog", {

@@ -58,7 +58,7 @@ export interface ImageRouteOption {
 
 const API_BASE_URL =
   typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:3325/api'
+    ? 'http://localhost:3355/api'
     : '/api';
 
 const cleanUrl = (url: string) => url.replace(/\/$/, '');
@@ -357,6 +357,17 @@ export const getImageRouteSizeOverride = (
   const key = normalizeSizeKey(imageSize);
   if (!route || !key) return null;
   return route.sizeOverrides?.[key] || null;
+};
+
+export const getImageRoutePointCost = (
+  route?: ImageRouteConfig | null,
+  imageSize?: string,
+): number => {
+  const sizeOverride = getImageRouteSizeOverride(route, imageSize);
+  if (sizeOverride && Number.isFinite(sizeOverride.pointCost)) {
+    return Number(sizeOverride.pointCost);
+  }
+  return Number(route?.pointCost || 0);
 };
 
 export const getImageModelNameForRoute = ({

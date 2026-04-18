@@ -553,6 +553,12 @@ window.selectPill = function(pillId, element, costLabel = null) {
     localStorage.setItem(GROK_REF_MODE_KEY, mode);
   }
 
+  if (pillId === 'modelPill' || pillId === 'linePill' || pillId === 'sizePill') {
+    if (typeof window.refreshClassicCatalogUi === 'function') {
+      window.refreshClassicCatalogUi();
+    }
+  }
+
   // 关闭菜单
   const menu = pill.querySelector('.dropdown-menu');
   const arrow = pill.querySelector('.arrow');
