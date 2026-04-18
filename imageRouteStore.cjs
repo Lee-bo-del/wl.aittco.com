@@ -224,7 +224,7 @@ const ensureImageRouteSchema = async () => {
                 allow_user_api_key_without_login,
                 api_key, api_key_env, point_cost, sort_order, is_active,
                 is_default_route, is_default_nano_banana_line, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             [
               row.route_id,
@@ -586,7 +586,7 @@ const createManagedImageRoute = async (input = {}) => {
           allow_user_api_key_without_login,
           api_key, api_key_env, point_cost, sort_order, is_active,
           is_default_route, is_default_nano_banana_line, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         payload.route_id,
