@@ -287,7 +287,30 @@ const createGeminiDataItems = (images = []) =>
     }
     return { url: value };
   });
+const normalizeRouteSizeKey = (value = "") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return ["1k", "2k", "4k"].includes(normalized) ? normalized : "";
+};
+const getRequestedRouteSizeKey = (requestBody = {}) => {
+  const rawSize =
+    requestBody.image_size ||
+    requestBody.imageSize ||
+    requestBody.size ||
+    requestBody.generationConfig?.imageConfig?.imageSize ||
+    requestBody.generationConfig?.image_config?.image_size ||
+    "";
+  return normalizeRouteSizeKey(rawSize);
+};
+const getRouteSizeOverride = (route, requestBody = {}) => {
+  const sizeKey = getRequestedRouteSizeKey(requestBody);
+  if (!route || !sizeKey) return null;
+  return route?.sizeOverrides?.[sizeKey] || null;
+};
 const getRouteModelName = (route, requestBody = {}, fallbackModel = "") => {
+  const sizeOverride = getRouteSizeOverride(route, requestBody);
+  if (sizeOverride?.upstreamModel) {
+    return sizeOverride.upstreamModel;
+  }
   if (route?.useRequestModel) {
     return requestBody.model || fallbackModel;
   }
@@ -301,8 +324,11 @@ const isGeminiNativeRoute = (route) =>
   route?.transport === "gemini-native" || isGeminiNativeStylePath(route);
 const isOpenAiImageRoute = (route) =>
   route?.transport === "openai-image" && !isGeminiNativeStylePath(route);
-const getRoutePointCost = (route, quantity = 1) =>
-  Math.max(0, Number(route?.pointCost || 0)) * Math.max(1, Number(quantity || 1));
+const getRoutePointCost = (route, quantity = 1, requestBody = {}) => {
+  const sizeOverride = getRouteSizeOverride(route, requestBody);
+  const pointCost = Number(sizeOverride?.pointCost ?? route?.pointCost ?? 0);
+  return Math.max(0, pointCost) * Math.max(1, Number(quantity || 1));
+};
 const resolveRequestedImageModel = async (requestBody = {}) => {
   const modelId = String(requestBody?.modelId || "").trim();
   if (modelId) {
@@ -2478,7 +2504,7 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
     }
 
     delete requestBody.uiMode;
-    const pointCost = shouldUseBilling ? getRoutePointCost(route, requestBody.n) : 0;
+    const pointCost = shouldUseBilling ? getRoutePointCost(route, requestBody.n, requestBody) : 0;
     if (shouldUseBilling) {
       billingAccount = await requireBillingAccount(req);
       chargeRouteId = route.id;
@@ -2974,7 +3000,7 @@ app.post("/api/edit", generateLimiter, async (req, res) => {
       return res.status(400).json({ error: "No available edit route" });
     }
 
-    const pointCost = shouldUseBilling ? getRoutePointCost(route, requestBody.n) : 0;
+    const pointCost = shouldUseBilling ? getRoutePointCost(route, requestBody.n, requestBody) : 0;
     if (shouldUseBilling) {
       billingAccount = await requireBillingAccount(req);
       chargeRouteId = route.id;
@@ -3263,7 +3289,7 @@ app.post("/api/gemini/generate", generateLimiter, async (req, res) => {
     }
 
     billingAccount = await requireBillingAccount(req);
-    const pointCost = getRoutePointCost(route, requestBody.n);
+    const pointCost = getRoutePointCost(route, requestBody.n, requestBody);
     chargeRouteId = route.id;
 
     delete requestBody.routeId;

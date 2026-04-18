@@ -3,6 +3,16 @@ import { getImageModelById, getImageModelRequestName } from './imageModels';
 
 export type ImageRouteTransport = 'openai-image' | 'gemini-native';
 export type ImageRouteMode = 'async' | 'sync';
+export type ImageRouteSizeKey = '1k' | '2k' | '4k';
+
+export interface ImageRouteSizeOverrideConfig {
+  upstreamModel?: string;
+  pointCost?: number;
+}
+
+export type ImageRouteSizeOverrideMap = Partial<
+  Record<ImageRouteSizeKey, ImageRouteSizeOverrideConfig>
+>;
 
 export interface ImageRouteConfig {
   id: string;
@@ -22,6 +32,7 @@ export interface ImageRouteConfig {
   allowUserApiKeyWithoutLogin?: boolean;
   apiKeyEnv?: string;
   pointCost?: number;
+  sizeOverrides?: ImageRouteSizeOverrideMap;
   isActive?: boolean;
   isDefaultRoute?: boolean;
   isDefaultNanoBananaLine?: boolean;
@@ -52,6 +63,42 @@ const API_BASE_URL =
 
 const cleanUrl = (url: string) => url.replace(/\/$/, '');
 
+const normalizeSizeKey = (value?: string): ImageRouteSizeKey | '' => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return ['1k', '2k', '4k'].includes(normalized) ? (normalized as ImageRouteSizeKey) : '';
+};
+
+const normalizeSizeOverrides = (
+  overrides?: ImageRouteSizeOverrideMap | null,
+): ImageRouteSizeOverrideMap => {
+  const next: ImageRouteSizeOverrideMap = {};
+  if (!overrides || typeof overrides !== 'object') {
+    return next;
+  }
+
+  Object.entries(overrides).forEach(([rawKey, rawValue]) => {
+    const key = normalizeSizeKey(rawKey);
+    if (!key || !rawValue || typeof rawValue !== 'object') {
+      return;
+    }
+
+    const upstreamModel = String(rawValue.upstreamModel || '').trim();
+    const pointCost = Number(rawValue.pointCost ?? '');
+    const entry: ImageRouteSizeOverrideConfig = {};
+    if (upstreamModel) {
+      entry.upstreamModel = upstreamModel;
+    }
+    if (Number.isFinite(pointCost) && pointCost >= 0) {
+      entry.pointCost = pointCost;
+    }
+    if (entry.upstreamModel || Number.isFinite(entry.pointCost)) {
+      next[key] = entry;
+    }
+  });
+
+  return next;
+};
+
 const normalizeRoute = (route: Partial<ImageRouteConfig> = {}): ImageRouteConfig => ({
   id: String(route.id || '').trim(),
   label: String(route.label || route.id || 'Route').trim(),
@@ -70,6 +117,7 @@ const normalizeRoute = (route: Partial<ImageRouteConfig> = {}): ImageRouteConfig
   allowUserApiKeyWithoutLogin: route.allowUserApiKeyWithoutLogin === true,
   apiKeyEnv: String(route.apiKeyEnv || '').trim(),
   pointCost: Number(route.pointCost || 0),
+  sizeOverrides: normalizeSizeOverrides(route.sizeOverrides),
   isActive: route.isActive !== false,
   isDefaultRoute: route.isDefaultRoute === true,
   isDefaultNanoBananaLine: route.isDefaultNanoBananaLine === true,
@@ -302,9 +350,19 @@ export const allowsDirectUserApiKeyImageRoute = (route?: ImageRouteConfig | null
   return route.allowUserApiKeyWithoutLogin === true;
 };
 
+export const getImageRouteSizeOverride = (
+  route?: ImageRouteConfig | null,
+  imageSize?: string,
+): ImageRouteSizeOverrideConfig | null => {
+  const key = normalizeSizeKey(imageSize);
+  if (!route || !key) return null;
+  return route.sizeOverrides?.[key] || null;
+};
+
 export const getImageModelNameForRoute = ({
   imageModel,
   imageLine,
+  imageSize,
 }: {
   imageModel: string;
   imageLine?: string;
@@ -312,6 +370,11 @@ export const getImageModelNameForRoute = ({
 }): string => {
   const route = getSelectedImageRoute(imageModel, imageLine);
   const requestModel = getImageModelRequestName(imageModel);
+  const sizeOverride = getImageRouteSizeOverride(route, imageSize);
+
+  if (sizeOverride?.upstreamModel) {
+    return sizeOverride.upstreamModel;
+  }
 
   if (route.upstreamModel) {
     return route.upstreamModel;

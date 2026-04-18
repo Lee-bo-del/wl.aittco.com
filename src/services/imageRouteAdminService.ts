@@ -5,6 +5,7 @@ import {
   refreshImageRouteCatalog,
   type ImageRouteCatalogShape,
   type ImageRouteConfig,
+  type ImageRouteSizeOverrideMap,
 } from '../config/imageRoutes';
 
 const API_BASE_URL =
@@ -46,6 +47,7 @@ export interface AdminImageRoutePayload {
   apiKeyEnv?: string;
   apiKey?: string;
   pointCost?: number;
+  sizeOverrides?: ImageRouteSizeOverrideMap;
   sortOrder?: number;
   isActive?: boolean;
   isDefaultRoute?: boolean;

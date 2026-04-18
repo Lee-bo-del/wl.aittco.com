@@ -37,6 +37,60 @@ const parseInteger = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 const trimTrailingSlash = (value = "") => trimToString(value).replace(/\/+$/, "");
+const normalizeSizeKey = (value = "") => {
+  const normalized = trimToString(value).toLowerCase();
+  return ["1k", "2k", "4k"].includes(normalized) ? normalized : "";
+};
+const normalizeSizeOverrides = (value) => {
+  let source = value;
+  if (typeof source === "string") {
+    const trimmed = source.trim();
+    if (!trimmed) return {};
+    try {
+      source = JSON.parse(trimmed);
+    } catch (error) {
+      return {};
+    }
+  }
+
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return {};
+  }
+
+  const next = {};
+  for (const [rawKey, rawEntry] of Object.entries(source)) {
+    const key = normalizeSizeKey(rawKey);
+    if (!key || !rawEntry || typeof rawEntry !== "object" || Array.isArray(rawEntry)) {
+      continue;
+    }
+
+    const upstreamModel = trimToString(rawEntry.upstreamModel || "");
+    const pointCostRaw = rawEntry.pointCost;
+    const pointCost =
+      pointCostRaw === null || pointCostRaw === undefined || pointCostRaw === ""
+        ? null
+        : Math.max(0, parseInteger(pointCostRaw, 0));
+
+    const entry = {};
+    if (upstreamModel) {
+      entry.upstreamModel = upstreamModel;
+    }
+    if (pointCost !== null) {
+      entry.pointCost = pointCost;
+    }
+    if (entry.upstreamModel || Number.isFinite(entry.pointCost)) {
+      next[key] = entry;
+    }
+  }
+
+  return next;
+};
+const stringifySizeOverrides = (value) => {
+  const normalized = normalizeSizeOverrides(value);
+  return Object.keys(normalized).length ? JSON.stringify(normalized) : null;
+};
+const hasSizeOverrideModel = (value) =>
+  Object.values(normalizeSizeOverrides(value)).some((entry) => trimToString(entry.upstreamModel || ""));
 
 const normalizeStaticRoute = (route, index) => ({
   route_id: trimToString(route.id),
@@ -57,6 +111,7 @@ const normalizeStaticRoute = (route, index) => ({
   api_key: null,
   api_key_env: trimToNull(route.apiKeyEnv),
   point_cost: parseInteger(route.pointCost, 0),
+  size_overrides: stringifySizeOverrides(route.sizeOverrides),
   sort_order: index,
   is_active: true,
   is_default_route:
@@ -91,6 +146,7 @@ const mapRowToRoute = (row, { includeSecrets = false } = {}) => ({
   allowUserApiKeyWithoutLogin: parseBoolean(row.allow_user_api_key_without_login, false),
   apiKeyEnv: trimToString(row.api_key_env || ""),
   pointCost: parseInteger(row.point_cost, 0),
+  sizeOverrides: normalizeSizeOverrides(row.size_overrides),
   sortOrder: parseInteger(row.sort_order, 0),
   isActive: parseBoolean(row.is_active, true),
   isDefaultRoute: parseBoolean(row.is_default_route, false),
@@ -173,6 +229,7 @@ const ensureImageRouteSchema = async () => {
           api_key LONGTEXT NULL,
           api_key_env VARCHAR(128) NULL,
           point_cost INT NOT NULL DEFAULT 0,
+          size_overrides LONGTEXT NULL,
           sort_order INT NOT NULL DEFAULT 0,
           is_active TINYINT(1) NOT NULL DEFAULT 1,
           is_default_route TINYINT(1) NOT NULL DEFAULT 0,
@@ -192,6 +249,16 @@ const ensureImageRouteSchema = async () => {
           ALTER TABLE image_routes
           ADD COLUMN allow_user_api_key_without_login TINYINT(1) NOT NULL DEFAULT 0
             AFTER use_request_model
+        `);
+      }
+      const [sizeOverrideColumns] = await pool.execute(
+        "SHOW COLUMNS FROM image_routes LIKE 'size_overrides'",
+      );
+      if (!sizeOverrideColumns?.length) {
+        await pool.execute(`
+          ALTER TABLE image_routes
+          ADD COLUMN size_overrides LONGTEXT NULL
+            AFTER point_cost
         `);
       }
       await pool.execute(
@@ -222,9 +289,9 @@ const ensureImageRouteSchema = async () => {
                 transport, mode, base_url, generate_path, task_path,
                 edit_path, chat_path, upstream_model, use_request_model,
                 allow_user_api_key_without_login,
-                api_key, api_key_env, point_cost, sort_order, is_active,
+                api_key, api_key_env, point_cost, size_overrides, sort_order, is_active,
                 is_default_route, is_default_nano_banana_line, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             [
               row.route_id,
@@ -245,6 +312,7 @@ const ensureImageRouteSchema = async () => {
               row.api_key,
               row.api_key_env,
               row.point_cost,
+              row.size_overrides,
               row.sort_order,
               row.is_active ? 1 : 0,
               row.is_default_route ? 1 : 0,
@@ -454,6 +522,10 @@ const validateRoutePayload = (input = {}, { partial = false } = {}) => {
     next.point_cost = Math.max(0, parseInteger(input.pointCost, 0));
   }
 
+  if (!partial || Object.prototype.hasOwnProperty.call(input, "sizeOverrides")) {
+    next.size_overrides = stringifySizeOverrides(input.sizeOverrides);
+  }
+
   if (!partial || Object.prototype.hasOwnProperty.call(input, "sortOrder")) {
     next.sort_order = parseInteger(input.sortOrder, 0);
   }
@@ -493,6 +565,7 @@ const validateResolvedRouteConfig = (payload) => {
     payload.allow_user_api_key_without_login,
     false,
   );
+  const sizeOverrides = normalizeSizeOverrides(payload.size_overrides);
   const taskPath = trimToString(payload.task_path || "");
 
   if (transport === "openai-image") {
@@ -513,9 +586,9 @@ const validateResolvedRouteConfig = (payload) => {
     if (!hasModelPlaceholder) {
       throw new Error("Gemini native routes must include {model} in generatePath");
     }
-    if (!useRequestModel && !upstreamModel) {
+    if (!useRequestModel && !upstreamModel && !hasSizeOverrideModel(sizeOverrides)) {
       throw new Error(
-        "Gemini native routes must define upstreamModel or enable useRequestModel",
+        "Gemini native routes must define upstreamModel, configure size override models, or enable useRequestModel",
       );
     }
   }
@@ -584,9 +657,9 @@ const createManagedImageRoute = async (input = {}) => {
           transport, mode, base_url, generate_path, task_path,
           edit_path, chat_path, upstream_model, use_request_model,
           allow_user_api_key_without_login,
-          api_key, api_key_env, point_cost, sort_order, is_active,
+          api_key, api_key_env, point_cost, size_overrides, sort_order, is_active,
           is_default_route, is_default_nano_banana_line, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         payload.route_id,
@@ -607,6 +680,7 @@ const createManagedImageRoute = async (input = {}) => {
         payload.api_key || null,
         payload.api_key_env || null,
         payload.point_cost || 0,
+        payload.size_overrides || null,
         payload.sort_order || 0,
         payload.is_active ?? 1,
         payload.is_default_route || 0,

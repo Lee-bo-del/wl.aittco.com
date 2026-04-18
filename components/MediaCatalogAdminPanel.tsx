@@ -82,6 +82,17 @@ type VideoModelForm = AdminVideoModelPayload & {
   durationOptionsInput: string;
 };
 
+type ImageRouteSizeKey = '1k' | '2k' | '4k';
+
+type ImageRouteForm = AdminImageRoutePayload & {
+  size1kUpstreamModel: string;
+  size1kPointCost: number;
+  size2kUpstreamModel: string;
+  size2kPointCost: number;
+  size4kUpstreamModel: string;
+  size4kPointCost: number;
+};
+
 type SelectionState = {
   imageModels: string[];
   imageRoutes: string[];
@@ -129,6 +140,38 @@ const buildLineLabel = (line: string, fallbackLabel?: string) => {
   if (String(line || '').trim().toLowerCase() === 'default') return 'Default Route';
   return String(fallbackLabel || '').trim() || 'Route';
 };
+const IMAGE_ROUTE_SIZE_KEYS: ImageRouteSizeKey[] = ['1k', '2k', '4k'];
+const IMAGE_ROUTE_SIZE_FIELD_MAP = {
+  '1k': { modelField: 'size1kUpstreamModel', costField: 'size1kPointCost' },
+  '2k': { modelField: 'size2kUpstreamModel', costField: 'size2kPointCost' },
+  '4k': { modelField: 'size4kUpstreamModel', costField: 'size4kPointCost' },
+} as const;
+const getImageRouteSizeOverrideValue = (
+  overrides: AdminImageRoutePayload['sizeOverrides'] | undefined,
+  key: ImageRouteSizeKey,
+) => overrides?.[key] || {};
+const buildImageRouteSizeOverrides = (
+  form: ImageRouteForm,
+): AdminImageRoutePayload['sizeOverrides'] => {
+  const next: NonNullable<AdminImageRoutePayload['sizeOverrides']> = {};
+  IMAGE_ROUTE_SIZE_KEYS.forEach((key) => {
+    const { modelField, costField } = IMAGE_ROUTE_SIZE_FIELD_MAP[key];
+    const upstreamModel = String(form[modelField] || '').trim();
+    const pointCost = Number(form[costField] || 0);
+    if (upstreamModel || pointCost > 0) {
+      next[key] = {};
+      if (upstreamModel) {
+        next[key]!.upstreamModel = upstreamModel;
+      }
+      if (pointCost > 0) {
+        next[key]!.pointCost = pointCost;
+      }
+    }
+  });
+  return Object.keys(next).length ? next : undefined;
+};
+const hasImageRouteSizeOverrideModel = (payload: AdminImageRoutePayload) =>
+  IMAGE_ROUTE_SIZE_KEYS.some((key) => String(payload.sizeOverrides?.[key]?.upstreamModel || '').trim());
 const getNextLineValue = (lines: string[]) => {
   const nums = lines
     .map((line) => String(line || '').match(/^line\s*([0-9]+)$/i)?.[1])
@@ -269,30 +312,42 @@ const createImageModelForm = (model?: Partial<AdminImageModel>): ImageModelForm 
   sortOrder: Number(model?.sortOrder || 0),
 });
 
-const createImageRouteForm = (route?: Partial<AdminImageRoute>, family = 'default'): AdminImageRoutePayload => ({
-  id: String(route?.id || '').trim(),
-  label: String(route?.label || '').trim(),
-  description: String(route?.description || '').trim(),
-  modelFamily: String(route?.modelFamily || family).trim(),
-  line: String(route?.line || 'line1').trim(),
-  transport: route?.transport || 'openai-image',
-  mode: route?.mode || 'async',
-  baseUrl: String(route?.baseUrl || '').trim(),
-  generatePath: String(route?.generatePath || '/v1/images/generations?async=true').trim(),
-  taskPath: String(route?.taskPath || '/v1/images/tasks/{taskId}').trim(),
-  editPath: String(route?.editPath || '/v1/images/edits?async=true').trim(),
-  chatPath: String(route?.chatPath || '').trim(),
-  upstreamModel: String(route?.upstreamModel || '').trim(),
-  useRequestModel: route?.useRequestModel === true,
-  allowUserApiKeyWithoutLogin: route?.allowUserApiKeyWithoutLogin === true,
-  apiKeyEnv: String(route?.apiKeyEnv || '').trim(),
-  apiKey: '',
-  pointCost: Number(route?.pointCost || 5),
-  sortOrder: Number(route?.sortOrder || 0),
-  isActive: route?.isActive !== false,
-  isDefaultRoute: route?.isDefaultRoute === true,
-  isDefaultNanoBananaLine: route?.isDefaultNanoBananaLine === true,
-});
+const createImageRouteForm = (route?: Partial<AdminImageRoute>, family = 'default'): ImageRouteForm => {
+  const size1k = getImageRouteSizeOverrideValue(route?.sizeOverrides, '1k');
+  const size2k = getImageRouteSizeOverrideValue(route?.sizeOverrides, '2k');
+  const size4k = getImageRouteSizeOverrideValue(route?.sizeOverrides, '4k');
+  return {
+    id: String(route?.id || '').trim(),
+    label: String(route?.label || '').trim(),
+    description: String(route?.description || '').trim(),
+    modelFamily: String(route?.modelFamily || family).trim(),
+    line: String(route?.line || 'line1').trim(),
+    transport: route?.transport || 'openai-image',
+    mode: route?.mode || 'async',
+    baseUrl: String(route?.baseUrl || '').trim(),
+    generatePath: String(route?.generatePath || '/v1/images/generations?async=true').trim(),
+    taskPath: String(route?.taskPath || '/v1/images/tasks/{taskId}').trim(),
+    editPath: String(route?.editPath || '/v1/images/edits?async=true').trim(),
+    chatPath: String(route?.chatPath || '').trim(),
+    upstreamModel: String(route?.upstreamModel || '').trim(),
+    useRequestModel: route?.useRequestModel === true,
+    allowUserApiKeyWithoutLogin: route?.allowUserApiKeyWithoutLogin === true,
+    apiKeyEnv: String(route?.apiKeyEnv || '').trim(),
+    apiKey: '',
+    pointCost: Number(route?.pointCost || 5),
+    sizeOverrides: route?.sizeOverrides,
+    size1kUpstreamModel: String(size1k.upstreamModel || '').trim(),
+    size1kPointCost: Number(size1k.pointCost || 0),
+    size2kUpstreamModel: String(size2k.upstreamModel || '').trim(),
+    size2kPointCost: Number(size2k.pointCost || 0),
+    size4kUpstreamModel: String(size4k.upstreamModel || '').trim(),
+    size4kPointCost: Number(size4k.pointCost || 0),
+    sortOrder: Number(route?.sortOrder || 0),
+    isActive: route?.isActive !== false,
+    isDefaultRoute: route?.isDefaultRoute === true,
+    isDefaultNanoBananaLine: route?.isDefaultNanoBananaLine === true,
+  };
+};
 const createVideoModelForm = (model?: Partial<AdminVideoModel>): VideoModelForm => ({
   id: String(model?.id || '').trim(),
   label: String(model?.label || '').trim(),
@@ -339,10 +394,10 @@ const createVideoRouteForm = (route?: Partial<AdminVideoRoute>, family = 'defaul
   isDefaultRoute: route?.isDefaultRoute === true,
 });
 
-const applyImageRoutePreset = (
-  route: AdminImageRoutePayload,
+const applyImageRoutePreset = <T extends AdminImageRoutePayload>(
+  route: T,
   preset: 'openai' | 'gemini',
-): AdminImageRoutePayload =>
+): T =>
   preset === 'openai'
     ? { ...route, transport: 'openai-image' as const, mode: 'async' as const, generatePath: '/v1/images/generations?async=true', taskPath: '/v1/images/tasks/{taskId}', editPath: '/v1/images/edits?async=true', chatPath: '', useRequestModel: false, allowUserApiKeyWithoutLogin: false }
     : { ...route, transport: 'gemini-native' as const, mode: 'sync' as const, generatePath: '/v1beta/models/{model}:generateContent', taskPath: '', editPath: '', chatPath: '', useRequestModel: false, allowUserApiKeyWithoutLogin: false };
@@ -354,7 +409,7 @@ const validateImageRoutePayload = (payload: AdminImageRoutePayload) => {
   if (payload.transport === 'openai-image' && payload.mode === 'async' && !String(payload.taskPath || '').trim()) return 'OpenAI 异步图片线路必须填写 taskPath。';
   if (payload.transport === 'gemini-native' && payload.mode !== 'sync') return 'Gemini 原生图片线路只能使用 sync 模式。';
   if (payload.transport === 'gemini-native' && !/\{model\}/.test(generatePath)) return 'Gemini 原生线路的 generatePath 必须包含 {model}。';
-  if (payload.transport === 'gemini-native' && !payload.useRequestModel && !String(payload.upstreamModel || '').trim()) return 'Gemini 原生线路需要填写 upstreamModel，或开启“使用模型请求名”。';
+  if (payload.transport === 'gemini-native' && !payload.useRequestModel && !String(payload.upstreamModel || '').trim() && !hasImageRouteSizeOverrideModel(payload)) return 'Gemini 原生线路需要填写默认 upstreamModel、尺寸覆写模型，或开启“使用模型请求名”。';
   if (payload.allowUserApiKeyWithoutLogin && !(payload.transport === 'openai-image' && payload.mode === 'async')) return '“允许用户 API Key 免登录”只适用于 OpenAI 兼容异步图片线路。';
   return null;
 };
@@ -479,7 +534,25 @@ const MediaCatalogAdminPanel: React.FC<MediaCatalogAdminPanelProps> = ({ session
         if (editor.mode === 'create') { await createAdminImageModel(payload); toast.success('图片模型已创建。'); } else { await updateAdminImageModel(editor.targetId || payload.id, payload); toast.success('图片模型已更新。'); }
       }
       if (editor.kind === 'image-route') {
-        const payload: AdminImageRoutePayload = { ...imageRouteForm, id: slugify(imageRouteForm.id, 'image-route'), label: imageRouteForm.label.trim() || buildLineLabel(imageRouteForm.line), description: imageRouteForm.description?.trim() || '', modelFamily: imageRouteForm.modelFamily.trim(), line: imageRouteForm.line.trim().toLowerCase(), baseUrl: imageRouteForm.baseUrl.trim(), generatePath: imageRouteForm.generatePath.trim(), taskPath: imageRouteForm.taskPath?.trim() || '', editPath: imageRouteForm.editPath?.trim() || '', chatPath: imageRouteForm.chatPath?.trim() || '', upstreamModel: imageRouteForm.upstreamModel?.trim() || '', apiKeyEnv: imageRouteForm.apiKeyEnv?.trim() || '', apiKey: sanitizeApiKeyInput(imageRouteForm.apiKey), pointCost: Number(imageRouteForm.pointCost || 0), sortOrder: Number(imageRouteForm.sortOrder || 0) };
+        const payload: AdminImageRoutePayload = {
+          ...imageRouteForm,
+          id: slugify(imageRouteForm.id, 'image-route'),
+          label: imageRouteForm.label.trim() || buildLineLabel(imageRouteForm.line),
+          description: imageRouteForm.description?.trim() || '',
+          modelFamily: imageRouteForm.modelFamily.trim(),
+          line: imageRouteForm.line.trim().toLowerCase(),
+          baseUrl: imageRouteForm.baseUrl.trim(),
+          generatePath: imageRouteForm.generatePath.trim(),
+          taskPath: imageRouteForm.taskPath?.trim() || '',
+          editPath: imageRouteForm.editPath?.trim() || '',
+          chatPath: imageRouteForm.chatPath?.trim() || '',
+          upstreamModel: imageRouteForm.upstreamModel?.trim() || '',
+          apiKeyEnv: imageRouteForm.apiKeyEnv?.trim() || '',
+          apiKey: sanitizeApiKeyInput(imageRouteForm.apiKey),
+          pointCost: Number(imageRouteForm.pointCost || 0),
+          sizeOverrides: buildImageRouteSizeOverrides(imageRouteForm),
+          sortOrder: Number(imageRouteForm.sortOrder || 0),
+        };
         const validationError = validateImageRoutePayload(payload);
         if (validationError) throw new Error(validationError);
         if (editor.mode === 'create') { await createAdminImageRoute(payload); toast.success('图片线路已创建。'); } else { await updateAdminImageRoute(editor.targetId || payload.id, payload); toast.success('图片线路已更新。'); }
@@ -978,6 +1051,93 @@ const MediaCatalogAdminPanel: React.FC<MediaCatalogAdminPanelProps> = ({ session
     [dragState, dropIndicator],
   );
 
+  const renderImageRouteEditor = useCallback(() => {
+    if (editor?.kind !== 'image-route') {
+      return null;
+    }
+
+    return (
+      <div className="mt-5 space-y-4">
+        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-50">
+          <div className="mb-3 flex flex-wrap gap-2">
+            <ActionButton onClick={() => setImageRouteForm((prev) => applyImageRoutePreset(prev, 'openai'))} tone="primary">OpenAI 图片异步模板</ActionButton>
+            <ActionButton onClick={() => setImageRouteForm((prev) => applyImageRoutePreset(prev, 'gemini'))} tone="success">Gemini 同步模板</ActionButton>
+          </div>
+          <div className="space-y-2 text-xs leading-5 text-cyan-100/85">
+            <p>OpenAI 图片异步：`openai-image + async + /v1/images/generations?async=true + taskPath`。</p>
+            <p>Gemini 同步：`gemini-native + sync + /v1beta/models/{'{model}'}:generateContent`。</p>
+            <p>默认 `upstreamModel` 和默认点数会作为兜底；如果填写 1K / 2K / 4K 覆写，则这些尺寸会优先走各自的模型和点数。</p>
+            <p>如果你想兼容旧用户 Key，只建议给 OpenAI 异步线路打开“允许用户 API Key 免登录”。</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2"><Input value={imageRouteForm.id} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, id: e.target.value }))} placeholder="route id" /></div>
+          <div className="sm:col-span-2"><Input value={imageRouteForm.label} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, label: e.target.value }))} placeholder="显示名称" /></div>
+          <div className="sm:col-span-2"><Textarea value={imageRouteForm.description || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="线路说明" /></div>
+          <Input value={imageRouteForm.modelFamily} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, modelFamily: e.target.value }))} placeholder="线路族（routeFamily）" />
+          <Input value={imageRouteForm.line} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, line: e.target.value }))} placeholder="line1 / line2" />
+          <Select value={imageRouteForm.transport} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, transport: e.target.value as AdminImageRoutePayload['transport'] }))}><option value="openai-image">openai-image</option><option value="gemini-native">gemini-native</option></Select>
+          <Select value={imageRouteForm.mode} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, mode: e.target.value as AdminImageRoutePayload['mode'] }))}><option value="async">async</option><option value="sync">sync</option></Select>
+          <Input value={imageRouteForm.baseUrl} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, baseUrl: e.target.value }))} placeholder="baseUrl" />
+          <Input type="number" value={String(imageRouteForm.pointCost || 0)} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, pointCost: Number(e.target.value || 0) }))} placeholder="默认点数" />
+          <div className="sm:col-span-2"><Input value={imageRouteForm.generatePath} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, generatePath: e.target.value }))} placeholder="generatePath" /></div>
+          <div className="sm:col-span-2"><Input value={imageRouteForm.taskPath || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, taskPath: e.target.value }))} placeholder="taskPath" /></div>
+          <div className="sm:col-span-2"><Input value={imageRouteForm.editPath || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, editPath: e.target.value }))} placeholder="editPath" /></div>
+          <div className="sm:col-span-2"><Input value={imageRouteForm.chatPath || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, chatPath: e.target.value }))} placeholder="chatPath" /></div>
+          <div className="sm:col-span-2"><Input value={imageRouteForm.upstreamModel || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, upstreamModel: e.target.value }))} placeholder="默认 upstreamModel（未匹配到尺寸覆写时使用）" /></div>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+          <div className="mb-3">
+            <div className="text-sm font-medium text-emerald-50">按尺寸映射（可选）</div>
+            <HelpText>
+              这里就是按尺寸单独映射：`1K -&gt; 模型 / 点数`、`2K -&gt; 模型 / 点数`、`4K -&gt; 模型 / 点数`。留空时会回退到上面的默认 `upstreamModel` 和默认点数。
+            </HelpText>
+          </div>
+          <div className="mb-3 hidden rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-xs text-emerald-50/85 sm:grid sm:grid-cols-[160px_minmax(0,1fr)_140px]">
+            <div>尺寸映射</div>
+            <div>调用模型</div>
+            <div>消耗点数</div>
+          </div>
+          <div className="space-y-3">
+            {([
+              { key: '1k', label: '1K', modelField: 'size1kUpstreamModel', costField: 'size1kPointCost' },
+              { key: '2k', label: '2K', modelField: 'size2kUpstreamModel', costField: 'size2kPointCost' },
+              { key: '4k', label: '4K', modelField: 'size4kUpstreamModel', costField: 'size4kPointCost' },
+            ] as const).map((item) => (
+              <div key={item.key} className="grid gap-3 rounded-2xl border border-white/10 bg-black/10 p-3 sm:grid-cols-[160px_minmax(0,1fr)_140px] sm:items-center">
+                <div className="flex items-center gap-2 text-sm font-medium text-emerald-100">
+                  <SectionPill className="justify-center border-emerald-400/30 bg-emerald-400/10 text-emerald-100">{item.label}</SectionPill>
+                  <span className="text-emerald-50/80">{item.label} -&gt; 模型 / 点数</span>
+                </div>
+                <Input value={String(imageRouteForm[item.modelField] || '')} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, [item.modelField]: e.target.value }))} placeholder={`${item.label} 调用模型，例如 nano-banana-pro-${item.key === '1k' ? '' : item.key}`.replace(/-$/, '')} />
+                <Input type="number" value={String(Number(imageRouteForm[item.costField] || 0))} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, [item.costField]: Number(e.target.value || 0) }))} placeholder={`${item.label} 消耗点数`} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Input value={imageRouteForm.apiKeyEnv || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, apiKeyEnv: e.target.value }))} placeholder="apiKeyEnv" />
+            <HelpText>线上推荐填写环境变量名；本地临时测试可直接在下面输入 API Key。</HelpText>
+          </div>
+          <div className="sm:col-span-2"><Input value={imageRouteForm.apiKey || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, apiKey: e.target.value }))} placeholder="直接保存 API Key（可选）" /></div>
+          <Input type="number" value={String(imageRouteForm.sortOrder || 0)} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} placeholder="sortOrder" />
+          <div />
+          <div className="sm:col-span-2 grid gap-2 sm:grid-cols-2">
+            <Toggle checked={imageRouteForm.useRequestModel === true} onChange={(checked) => setImageRouteForm((prev) => ({ ...prev, useRequestModel: checked }))} label="使用模型请求名" />
+            <Toggle checked={imageRouteForm.isActive !== false} onChange={(checked) => setImageRouteForm((prev) => ({ ...prev, isActive: checked }))} label="启用" />
+            <Toggle checked={imageRouteForm.allowUserApiKeyWithoutLogin === true} onChange={(checked) => setImageRouteForm((prev) => ({ ...prev, allowUserApiKeyWithoutLogin: checked }))} label="允许用户 API Key 免登录" />
+            <Toggle checked={imageRouteForm.isDefaultRoute === true} onChange={(checked) => setImageRouteForm((prev) => ({ ...prev, isDefaultRoute: checked }))} label="本线路族默认线" />
+            <Toggle checked={imageRouteForm.isDefaultNanoBananaLine === true} onChange={(checked) => setImageRouteForm((prev) => ({ ...prev, isDefaultNanoBananaLine: checked }))} label="Nano 默认线" />
+          </div>
+        </div>
+      </div>
+    );
+  }, [editor?.kind, imageRouteForm]);
+
   if (!isSuperAdmin) {
     return <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-white"><h3 className="text-lg font-semibold">模型与线路管理</h3><p className="mt-2 text-sm text-gray-400">只有超级管理员可以维护模型、线路和高级批量操作。</p></div>;
   }
@@ -1297,7 +1457,7 @@ const MediaCatalogAdminPanel: React.FC<MediaCatalogAdminPanelProps> = ({ session
           <div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">{editor ? editor.kind === 'image-model' ? editor.mode === 'create' ? '新建图片模型' : '编辑图片模型' : editor.kind === 'image-route' ? editor.mode === 'create' ? '新建图片线路' : '编辑图片线路' : editor.kind === 'video-model' ? editor.mode === 'create' ? '新建视频模型' : '编辑视频模型' : editor.mode === 'create' ? '新建视频线路' : '编辑视频线路' : '右侧编辑区'}</h3><p className="mt-1 text-sm text-gray-400">{editor ? '填好表单后点击保存，模型和线路会立即同步到前台 catalog。' : '从左侧选择一个模型或线路进行编辑，或直接新建。'}</p></div>{editor ? <button type="button" onClick={resetEditor} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white"><X size={16} /></button> : null}</div>
           {!editor ? <div className="mt-5 space-y-4 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-gray-300"><p>当前这版已经支持：</p><ul className="list-disc space-y-2 pl-5 text-gray-400"><li>图片/视频模型与线路的新增、编辑、删除</li><li>批量启用、停用、删除选中项</li><li>复制某个模型下的整组线路到另一个模型</li><li>图片线路模板快速填充和保存前校验</li></ul></div> : null}
           {editor?.kind === 'image-model' ? <div className="mt-5 space-y-4"><div className="grid gap-3 sm:grid-cols-2"><div className="sm:col-span-2"><Input value={imageModelForm.id} onChange={(e) => setImageModelForm((prev) => ({ ...prev, id: e.target.value }))} placeholder="model id" /><HelpText>模型唯一 ID，例如 `nano-banana-pro`。</HelpText></div><div className="sm:col-span-2"><Input value={imageModelForm.label} onChange={(e) => setImageModelForm((prev) => ({ ...prev, label: e.target.value }))} placeholder="显示名称" /></div><div className="sm:col-span-2"><Textarea value={imageModelForm.description || ''} onChange={(e) => setImageModelForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="模型说明" /></div><Input value={imageModelForm.modelFamily} onChange={(e) => setImageModelForm((prev) => ({ ...prev, modelFamily: e.target.value }))} placeholder="modelFamily" /><Input value={imageModelForm.routeFamily} onChange={(e) => setImageModelForm((prev) => ({ ...prev, routeFamily: e.target.value }))} placeholder="routeFamily" /><Input value={imageModelForm.requestModel || ''} onChange={(e) => setImageModelForm((prev) => ({ ...prev, requestModel: e.target.value }))} placeholder="requestModel" /><Input type="number" value={String(imageModelForm.selectorCost || 0)} onChange={(e) => setImageModelForm((prev) => ({ ...prev, selectorCost: Number(e.target.value || 0) }))} placeholder="selectorCost" /><Select value={imageModelForm.iconKind} onChange={(e) => setImageModelForm((prev) => ({ ...prev, iconKind: e.target.value as AdminImageModelPayload['iconKind'] }))}><option value="banana">banana</option><option value="banana-zap">banana-zap</option><option value="sparkles">sparkles</option><option value="layers">layers</option><option value="zap">zap</option><option value="none">none</option></Select><Select value={imageModelForm.panelLayout} onChange={(e) => setImageModelForm((prev) => ({ ...prev, panelLayout: e.target.value as AdminImageModelPayload['panelLayout'] }))}><option value="nano-banana">nano-banana</option><option value="default">default</option><option value="compact">compact</option></Select><Select value={imageModelForm.sizeBehavior} onChange={(e) => setImageModelForm((prev) => ({ ...prev, sizeBehavior: e.target.value as AdminImageModelPayload['sizeBehavior'] }))}><option value="passthrough">passthrough</option><option value="doubao-v5">doubao-v5</option><option value="doubao-v45">doubao-v45</option><option value="z-image-turbo">z-image-turbo</option></Select><Input value={imageModelForm.defaultSize || ''} onChange={(e) => setImageModelForm((prev) => ({ ...prev, defaultSize: e.target.value }))} placeholder="defaultSize" /><div className="sm:col-span-2"><Input value={imageModelForm.sizeOptionsInput} onChange={(e) => setImageModelForm((prev) => ({ ...prev, sizeOptionsInput: e.target.value }))} placeholder="sizeOptions，用逗号分隔" /></div><div className="sm:col-span-2"><Input value={imageModelForm.extraAspectRatiosInput} onChange={(e) => setImageModelForm((prev) => ({ ...prev, extraAspectRatiosInput: e.target.value }))} placeholder="额外比例，用逗号分隔" /></div><Input type="number" value={String(imageModelForm.sortOrder || 0)} onChange={(e) => setImageModelForm((prev) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} placeholder="sortOrder" /><div className="sm:col-span-2 grid gap-2 sm:grid-cols-2"><Toggle checked={imageModelForm.showSizeSelector !== false} onChange={(checked) => setImageModelForm((prev) => ({ ...prev, showSizeSelector: checked }))} label="显示尺寸选择器" /><Toggle checked={imageModelForm.supportsCustomRatio !== false} onChange={(checked) => setImageModelForm((prev) => ({ ...prev, supportsCustomRatio: checked }))} label="允许自定义比例" /><Toggle checked={imageModelForm.isActive !== false} onChange={(checked) => setImageModelForm((prev) => ({ ...prev, isActive: checked }))} label="启用" /><Toggle checked={imageModelForm.isDefaultModel === true} onChange={(checked) => setImageModelForm((prev) => ({ ...prev, isDefaultModel: checked }))} label="默认模型" /></div></div></div> : null}
-          {editor?.kind === 'image-route' ? <div className="mt-5 space-y-4"><div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-50"><div className="mb-3 flex flex-wrap gap-2"><ActionButton onClick={() => setImageRouteForm((prev) => applyImageRoutePreset(prev, 'openai'))} tone="primary">OpenAI 图片异步模板</ActionButton><ActionButton onClick={() => setImageRouteForm((prev) => applyImageRoutePreset(prev, 'gemini'))} tone="success">Gemini 同步模板</ActionButton></div><div className="space-y-2 text-xs leading-5 text-cyan-100/85"><p>OpenAI 图片异步：`openai-image + async + /v1/images/generations?async=true + taskPath`。</p><p>Gemini 同步：`gemini-native + sync + /v1beta/models/{'{model}'}:generateContent`。</p><p>如果你想兼容旧用户 Key，只建议给 OpenAI 异步线路打开“允许用户 API Key 免登录”。</p></div></div><div className="grid gap-3 sm:grid-cols-2"><div className="sm:col-span-2"><Input value={imageRouteForm.id} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, id: e.target.value }))} placeholder="route id" /></div><div className="sm:col-span-2"><Input value={imageRouteForm.label} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, label: e.target.value }))} placeholder="显示名称" /></div><div className="sm:col-span-2"><Textarea value={imageRouteForm.description || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="线路说明" /></div><Input value={imageRouteForm.modelFamily} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, modelFamily: e.target.value }))} placeholder="线路族（routeFamily）" /><Input value={imageRouteForm.line} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, line: e.target.value }))} placeholder="line1 / line2" /><Select value={imageRouteForm.transport} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, transport: e.target.value as AdminImageRoutePayload['transport'] }))}><option value="openai-image">openai-image</option><option value="gemini-native">gemini-native</option></Select><Select value={imageRouteForm.mode} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, mode: e.target.value as AdminImageRoutePayload['mode'] }))}><option value="async">async</option><option value="sync">sync</option></Select><Input value={imageRouteForm.baseUrl} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, baseUrl: e.target.value }))} placeholder="baseUrl" /><Input type="number" value={String(imageRouteForm.pointCost || 0)} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, pointCost: Number(e.target.value || 0) }))} placeholder="点数" /><div className="sm:col-span-2"><Input value={imageRouteForm.generatePath} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, generatePath: e.target.value }))} placeholder="generatePath" /></div><div className="sm:col-span-2"><Input value={imageRouteForm.taskPath || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, taskPath: e.target.value }))} placeholder="taskPath" /></div><div className="sm:col-span-2"><Input value={imageRouteForm.editPath || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, editPath: e.target.value }))} placeholder="editPath" /></div><div className="sm:col-span-2"><Input value={imageRouteForm.chatPath || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, chatPath: e.target.value }))} placeholder="chatPath" /></div><div className="sm:col-span-2"><Input value={imageRouteForm.upstreamModel || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, upstreamModel: e.target.value }))} placeholder="upstreamModel" /></div><div className="sm:col-span-2"><Input value={imageRouteForm.apiKeyEnv || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, apiKeyEnv: e.target.value }))} placeholder="apiKeyEnv" /><HelpText>线上推荐填写环境变量名；本地临时测试可直接在下面输入 API Key。</HelpText></div><div className="sm:col-span-2"><Input value={imageRouteForm.apiKey || ''} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, apiKey: e.target.value }))} placeholder="直接保存 API Key（可选）" /></div><Input type="number" value={String(imageRouteForm.sortOrder || 0)} onChange={(e) => setImageRouteForm((prev) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} placeholder="sortOrder" /><div className="sm:col-span-2 grid gap-2 sm:grid-cols-2"><Toggle checked={imageRouteForm.useRequestModel === true} onChange={(checked) => setImageRouteForm((prev) => ({ ...prev, useRequestModel: checked }))} label="使用模型请求名" /><Toggle checked={imageRouteForm.isActive !== false} onChange={(checked) => setImageRouteForm((prev) => ({ ...prev, isActive: checked }))} label="启用" /><Toggle checked={imageRouteForm.allowUserApiKeyWithoutLogin === true} onChange={(checked) => setImageRouteForm((prev) => ({ ...prev, allowUserApiKeyWithoutLogin: checked }))} label="允许用户 API Key 免登录" /><Toggle checked={imageRouteForm.isDefaultRoute === true} onChange={(checked) => setImageRouteForm((prev) => ({ ...prev, isDefaultRoute: checked }))} label="本线路族默认线" /><Toggle checked={imageRouteForm.isDefaultNanoBananaLine === true} onChange={(checked) => setImageRouteForm((prev) => ({ ...prev, isDefaultNanoBananaLine: checked }))} label="Nano 默认线" /></div></div></div> : null}
+          {renderImageRouteEditor()}
           {editor?.kind === 'video-model' ? <div className="mt-5 space-y-4"><div className="grid gap-3 sm:grid-cols-2"><div className="sm:col-span-2"><Input value={videoModelForm.id} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, id: e.target.value }))} placeholder="model id" /></div><div className="sm:col-span-2"><Input value={videoModelForm.label} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, label: e.target.value }))} placeholder="显示名称" /></div><div className="sm:col-span-2"><Textarea value={videoModelForm.description || ''} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="模型说明" /></div><Input value={videoModelForm.modelFamily} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, modelFamily: e.target.value }))} placeholder="modelFamily" /><Input value={videoModelForm.routeFamily} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, routeFamily: e.target.value }))} placeholder="routeFamily" /><Input value={videoModelForm.requestModel || ''} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, requestModel: e.target.value }))} placeholder="requestModel" /><Input type="number" value={String(videoModelForm.selectorCost || 0)} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, selectorCost: Number(e.target.value || 0) }))} placeholder="selectorCost" /><Input type="number" value={String(videoModelForm.maxReferenceImages || 1)} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, maxReferenceImages: Number(e.target.value || 1) }))} placeholder="最大参考图" /><Input value={videoModelForm.defaultAspectRatio || ''} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, defaultAspectRatio: e.target.value }))} placeholder="默认比例" /><Input value={videoModelForm.defaultDuration || ''} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, defaultDuration: e.target.value }))} placeholder="默认时长" /><div className="sm:col-span-2"><Input value={videoModelForm.referenceLabelsInput} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, referenceLabelsInput: e.target.value }))} placeholder="参考图标签，用逗号分隔" /></div><div className="sm:col-span-2"><Input value={videoModelForm.aspectRatioOptionsInput} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, aspectRatioOptionsInput: e.target.value }))} placeholder="比例选项，用逗号分隔" /></div><div className="sm:col-span-2"><Input value={videoModelForm.durationOptionsInput} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, durationOptionsInput: e.target.value }))} placeholder="时长选项，用逗号分隔" /></div><Input type="number" value={String(videoModelForm.sortOrder || 0)} onChange={(e) => setVideoModelForm((prev) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} placeholder="sortOrder" /><div className="sm:col-span-2 grid gap-2 sm:grid-cols-2"><Toggle checked={videoModelForm.supportsHd === true} onChange={(checked) => setVideoModelForm((prev) => ({ ...prev, supportsHd: checked }))} label="支持高清" /><Toggle checked={videoModelForm.defaultHd === true} onChange={(checked) => setVideoModelForm((prev) => ({ ...prev, defaultHd: checked }))} label="默认高清" /><Toggle checked={videoModelForm.isActive !== false} onChange={(checked) => setVideoModelForm((prev) => ({ ...prev, isActive: checked }))} label="启用" /><Toggle checked={videoModelForm.isDefaultModel === true} onChange={(checked) => setVideoModelForm((prev) => ({ ...prev, isDefaultModel: checked }))} label="默认模型" /></div></div></div> : null}
           {editor?.kind === 'video-route' ? <div className="mt-5 space-y-4"><div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-4 text-sm text-fuchsia-50"><div className="space-y-2 text-xs leading-5 text-fuchsia-100/85"><p>视频线路当前统一使用 OpenAI 兼容异步接口。</p><p>建议至少填写 `generatePath`、`taskPath`、`upstreamModel`，然后再决定是否启用旧 Key 兼容。</p></div></div><div className="grid gap-3 sm:grid-cols-2"><div className="sm:col-span-2"><Input value={videoRouteForm.id} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, id: e.target.value }))} placeholder="route id" /></div><div className="sm:col-span-2"><Input value={videoRouteForm.label} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, label: e.target.value }))} placeholder="显示名称" /></div><div className="sm:col-span-2"><Textarea value={videoRouteForm.description || ''} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="线路说明" /></div><Input value={videoRouteForm.routeFamily} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, routeFamily: e.target.value }))} placeholder="线路族（routeFamily）" /><Input value={videoRouteForm.line} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, line: e.target.value }))} placeholder="line1 / line2" /><Input value={videoRouteForm.baseUrl} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, baseUrl: e.target.value }))} placeholder="baseUrl" /><Input type="number" value={String(videoRouteForm.pointCost || 0)} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, pointCost: Number(e.target.value || 0) }))} placeholder="点数" /><div className="sm:col-span-2"><Input value={videoRouteForm.generatePath} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, generatePath: e.target.value }))} placeholder="generatePath" /></div><div className="sm:col-span-2"><Input value={videoRouteForm.taskPath || ''} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, taskPath: e.target.value }))} placeholder="taskPath" /></div><div className="sm:col-span-2"><Input value={videoRouteForm.upstreamModel || ''} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, upstreamModel: e.target.value }))} placeholder="upstreamModel" /></div><div className="sm:col-span-2"><Input value={videoRouteForm.apiKeyEnv || ''} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, apiKeyEnv: e.target.value }))} placeholder="apiKeyEnv" /></div><div className="sm:col-span-2"><Input value={videoRouteForm.apiKey || ''} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, apiKey: e.target.value }))} placeholder="直接保存 API Key（可选）" /></div><Input type="number" value={String(videoRouteForm.sortOrder || 0)} onChange={(e) => setVideoRouteForm((prev) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} placeholder="sortOrder" /><div className="sm:col-span-2 grid gap-2 sm:grid-cols-2"><Toggle checked={videoRouteForm.useRequestModel === true} onChange={(checked) => setVideoRouteForm((prev) => ({ ...prev, useRequestModel: checked }))} label="使用模型请求名" /><Toggle checked={videoRouteForm.allowUserApiKeyWithoutLogin === true} onChange={(checked) => setVideoRouteForm((prev) => ({ ...prev, allowUserApiKeyWithoutLogin: checked }))} label="允许用户 API Key 免登录" /><Toggle checked={videoRouteForm.isActive !== false} onChange={(checked) => setVideoRouteForm((prev) => ({ ...prev, isActive: checked }))} label="启用" /><Toggle checked={videoRouteForm.isDefaultRoute === true} onChange={(checked) => setVideoRouteForm((prev) => ({ ...prev, isDefaultRoute: checked }))} label="默认线路" /></div></div></div> : null}
           {editor ? <div className="mt-5 flex items-center justify-end gap-2"><ActionButton onClick={resetEditor}>取消</ActionButton><ActionButton onClick={() => void saveEditor()} icon={saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} tone="primary" disabled={saving}>保存</ActionButton></div> : null}
