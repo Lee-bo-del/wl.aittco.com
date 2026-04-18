@@ -55,7 +55,7 @@ COPY scripts ./scripts
 RUN mkdir -p /app/uploads/announcements
 
 # Expose port
-EXPOSE 3325
+EXPOSE 3355
 
 # Start the server
 CMD ["node", "server.cjs"]

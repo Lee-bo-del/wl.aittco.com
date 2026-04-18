@@ -118,7 +118,7 @@ const logger = winston.createLogger({
 });
 
 const app = express();
-const PORT = 3325;
+const PORT = Number.parseInt(String(process.env.PORT || "3355"), 10);
 const UPSTREAM_URL = "https://api.bltcy.ai";
 
 // Default upstream kept for balance, video, and prompt helper endpoints.

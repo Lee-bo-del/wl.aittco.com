@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-const PORT = 3325;
+const PORT = Number.parseInt(process.env.PORT || '3355', 10);
 
 app.get('/', (req, res) => res.send('Hello World'));
 

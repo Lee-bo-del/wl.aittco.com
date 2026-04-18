@@ -7,7 +7,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-change_me}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-nano_banana_pro}
     ports:
-      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3308}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -26,10 +26,11 @@ services:
     env_file:
       - .env
     ports:
-      - "127.0.0.1:3325:3325"
+      - "127.0.0.1:${PORT:-3355}:${PORT:-3355}"
     volumes:
       - ./uploads:/app/uploads
     environment:
+      PORT: ${PORT:-3355}
       NODE_ENV: ${NODE_ENV:-production}
       APP_NAME: ${APP_NAME:-Nano Banana Pro}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@example.com}

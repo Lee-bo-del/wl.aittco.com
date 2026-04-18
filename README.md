@@ -23,6 +23,9 @@ View your app in AI Studio: https://ai.studio/apps/drive/1MB-T6-X8pVklMaEwAk7UBH
 3. Fill in your image route keys, SMTP settings, and either:
    `MYSQL_URL`
    or `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE`
+   If you use docker-compose, the default host-side ports are:
+   `PORT=3355`
+   `MYSQL_HOST_PORT=3308`
 4. Start the app:
    `npm run start`
 
@@ -36,6 +39,12 @@ This project uses SMTP for email login codes, so Resend works out of the box thr
 - `SMTP_USER=resend`
 - `SMTP_PASS=<your Resend API key>`
 - `SMTP_FROM=Nano Banana Pro <noreply@yourdomain.com>`
+
+### Default ports
+
+- `5188` - Vite frontend dev server
+- `3355` - Node.js backend / BaoTa reverse proxy target
+- `3308` - Host-side MySQL bind for docker-compose
 
 ## MySQL migration
 
