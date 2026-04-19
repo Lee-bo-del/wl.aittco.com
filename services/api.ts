@@ -7,15 +7,16 @@ import {
   allowsDirectUserApiKeyImageRoute,
   getImageRouteById,
 } from '../src/config/imageRoutes';
-import { formatPoint } from '../src/utils/pointFormat';
 
 const API_BASE_URL =
   typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? 'http://localhost:3325/api'
     : '/api';
 
-const cleanUrl = (url: string) => url.replace(/\/$/, '');
+const USER_FACING_GENERATION_ERROR_MESSAGE =
+  '请检查提示词或参考图，可能触发了安全限制，请更换后重试';
 
+const cleanUrl = (url: string) => url.replace(/\/$/, '');
 const sanitizeHeader = (value: string) => value.replace(/[^\x00-\x7F]/g, '').trim();
 
 const buildAuthHeaders = (apiKey?: string | null): Record<string, string> => {
@@ -25,7 +26,6 @@ const buildAuthHeaders = (apiKey?: string | null): Record<string, string> => {
   const authorization = sanitizeHeader(
     trimmed.startsWith('Bearer ') ? trimmed : `Bearer ${trimmed}`,
   );
-
   return authorization ? { Authorization: authorization } : {};
 };
 
@@ -57,6 +57,26 @@ const buildImageRequestHeaders = async (
     ...buildAuthHeaders(apiKey),
     'Content-Type': 'application/json',
   };
+};
+
+const handleApiError = async (response: Response, fallbackMessage: string) => {
+  const rawText = await response.text();
+  let errJson: any = null;
+  try {
+    errJson = JSON.parse(rawText);
+  } catch (_) {
+    errJson = null;
+  }
+
+  console.error('[Generation API] request failed', {
+    status: response.status,
+    fallbackMessage,
+    rawText: rawText?.slice?.(0, 1000) || rawText,
+    error: errJson?.error || null,
+    code: errJson?.code || null,
+  });
+
+  throw new Error(USER_FACING_GENERATION_ERROR_MESSAGE);
 };
 
 export const getModelBySize = (size: string): string => {
@@ -118,58 +138,6 @@ export function findAllUrlsInObject(obj: any, results: string[] = []) {
   });
 }
 
-const handleApiError = async (response: Response, fallbackMessage: string) => {
-  const rawText = await response.text();
-  let errJson: any = null;
-
-  try {
-    errJson = JSON.parse(rawText);
-  } catch {
-    errJson = null;
-  }
-
-  const rawError = errJson?.error?.message || errJson?.error || rawText;
-  const lowerErr = String(rawError).toLowerCase();
-
-  if (errJson?.code === 'INSUFFICIENT_POINTS') {
-    const currentPoints = formatPoint(errJson?.currentPoints ?? 0);
-    const requiredPoints = formatPoint(errJson?.requiredPoints ?? 0);
-    throw new Error(`点数不足：当前 ${currentPoints} 点，需要 ${requiredPoints} 点`);
-  }
-
-  if (errJson?.code === 'AUTH_LOGIN_REQUIRED') {
-    throw new Error('请先登录后再使用点数功能');
-  }
-
-  if (errJson?.code === 'ACCOUNT_AUTH_REQUIRED') {
-    throw new Error('账户验证失败，请重新登录');
-  }
-
-  if (
-    lowerErr.includes('pre_consume_token_quota_failed') ||
-    lowerErr.includes('pre-consume')
-  ) {
-    throw new Error('上游账户预扣额度失败，请联系管理员');
-  }
-
-  if (
-    lowerErr.includes('token quota is not enough') ||
-    lowerErr.includes('insufficient balance') ||
-    lowerErr.includes('not enough balance') ||
-    lowerErr.includes('quota')
-  ) {
-    throw new Error('额度不足，请充值后重试');
-  }
-
-  if (response.status === 401) {
-    throw new Error('请求未授权，请先确认登录状态或 API Key');
-  }
-
-  throw new Error(
-    errJson?.error?.message || errJson?.error || `${fallbackMessage} (${response.status})`,
-  );
-};
-
 export const generateImageApi = async (
   apiKey: string | undefined,
   payload: any,
@@ -184,7 +152,7 @@ export const generateImageApi = async (
   });
 
   if (!response.ok) {
-    await handleApiError(response, '提交失败');
+    await handleApiError(response, 'Image generation submit failed');
   }
 
   const resJson = await response.json();
@@ -199,7 +167,7 @@ export const generateImageApi = async (
 
   const taskId = resJson.id || resJson.task_id || resJson.data?.task_id;
   if (!taskId && !resJson.url) {
-    throw new Error('No task id or image url returned from API');
+    throw new Error(USER_FACING_GENERATION_ERROR_MESSAGE);
   }
 
   return { taskId: taskId || '', ...resJson };
@@ -219,13 +187,13 @@ export const editImageApi = async (
   });
 
   if (!response.ok) {
-    await handleApiError(response, '重绘失败');
+    await handleApiError(response, 'Image edit submit failed');
   }
 
   const resJson = await response.json();
   const taskId = resJson.id || resJson.task_id || resJson.data?.task_id;
   if (!taskId) {
-    throw new Error('No task id returned from API');
+    throw new Error(USER_FACING_GENERATION_ERROR_MESSAGE);
   }
 
   return { taskId };
@@ -245,7 +213,7 @@ export const getTaskStatusApi = async (
   });
 
   if (!response.ok) {
-    throw new Error(`Polling HTTP error: ${response.status}`);
+    throw new Error(USER_FACING_GENERATION_ERROR_MESSAGE);
   }
 
   return response.json();
@@ -267,7 +235,7 @@ export const checkVideoTaskStatus = async (
   });
 
   if (!response.ok) {
-    throw new Error(`Video polling HTTP error: ${response.status}`);
+    throw new Error(USER_FACING_GENERATION_ERROR_MESSAGE);
   }
 
   return response.json();
@@ -309,7 +277,7 @@ export const generateGeminiImage = async (
   });
 
   if (!response.ok) {
-    await handleApiError(response, '生成失败');
+    await handleApiError(response, 'Gemini generation submit failed');
   }
 
   return response.json();

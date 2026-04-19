@@ -1015,6 +1015,8 @@ const sendAuthError = (res, error) => {
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const USER_FACING_GENERATION_ERROR_MESSAGE =
+  "请检查提示词或参考图，可能触发了安全限制，请更换后重试";
 const NON_IDEMPOTENT_UPSTREAM_ERROR_MESSAGE =
   "Upstream connection closed after the generation request was sent. Automatic retry is disabled to avoid duplicate billing. Please check the upstream dashboard before retrying manually.";
 const isRetryableNetworkError = (error) => {
@@ -1049,6 +1051,44 @@ const isRetryableNetworkError = (error) => {
     causeMessage.includes("other side closed") ||
     causeMessage.includes("connect timeout")
   );
+};
+const toSafeHttpStatus = (status, fallbackStatus = 500) => {
+  const numeric = Number.parseInt(String(status || fallbackStatus), 10);
+  if (!Number.isFinite(numeric)) return fallbackStatus;
+  if (numeric < 400 || numeric > 599) return fallbackStatus;
+  return numeric;
+};
+const sendUserFacingGenerationError = (res, status = 500) =>
+  res.status(toSafeHttpStatus(status, 500)).json({
+    error: USER_FACING_GENERATION_ERROR_MESSAGE,
+  });
+const respondWithUserFacingGenerationError = (res, error, fallbackStatus = 500) => {
+  if (error instanceof BillingError) {
+    const isAuthError =
+      error.code === "ACCOUNT_AUTH_REQUIRED" || error.code === "AUTH_LOGIN_REQUIRED";
+    return sendUserFacingGenerationError(res, isAuthError ? 401 : 400);
+  }
+
+  if (error instanceof AuthError) {
+    return sendUserFacingGenerationError(
+      res,
+      error.code === "AUTH_LOGIN_REQUIRED" ? 401 : 400,
+    );
+  }
+
+  if (error?.response?.status) {
+    return sendUserFacingGenerationError(res, error.response.status);
+  }
+
+  if (error?.code === "ECONNABORTED") {
+    return sendUserFacingGenerationError(res, 504);
+  }
+
+  if (isRetryableNetworkError(error)) {
+    return sendUserFacingGenerationError(res, 502);
+  }
+
+  return sendUserFacingGenerationError(res, fallbackStatus);
 };
 const requestWithRetry = async (
   fn,
@@ -2589,7 +2629,7 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
     );
     const shouldUseBilling = !useUserProvidedApiKey;
     if (!route) {
-      return res.status(400).json({ error: "No available image route" });
+      return sendUserFacingGenerationError(res, 400);
     }
 
     delete requestBody.uiMode;
@@ -2688,9 +2728,7 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
     }
 
     if (!isOpenAiImageRoute(route)) {
-      return res.status(400).json({
-        error: `Unsupported image route transport: ${route.transport}`,
-      });
+      return sendUserFacingGenerationError(res, 400);
     }
 
     const userKey = getRouteAuthorization(route, fallbackAuthorization, {
@@ -3089,7 +3127,6 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
         : response.data,
     );
   } catch (error) {
-    if (sendBillingError(res, error)) return;
     if (billingCharge?.chargeId && billingAccount?.accountId && !localTaskId) {
       await refundPoints(billingAccount.accountId, billingCharge.chargeId, {
         reason: "request_failed",
@@ -3109,16 +3146,7 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
       stack: error.stack,
       response: error.response?.data,
     });
-
-    if (error.response) {
-      res.status(error.response.status).json(error.response.data);
-    } else if (error.code === "ECONNABORTED") {
-      res.status(504).json({ error: "Request timed out while generating image" });
-    } else if (isRetryableNetworkError(error)) {
-      res.status(502).json({ error: NON_IDEMPOTENT_UPSTREAM_ERROR_MESSAGE });
-    } else {
-      res.status(500).json({ error: error.message || "Image generation failed" });
-    }
+    respondWithUserFacingGenerationError(res, error, 500);
   }
 });
 app.post("/api/edit", generateLimiter, async (req, res) => {
@@ -3141,7 +3169,7 @@ app.post("/api/edit", generateLimiter, async (req, res) => {
     const shouldUseBilling = !useUserProvidedApiKey;
 
     if (!route) {
-      return res.status(400).json({ error: "No available edit route" });
+      return sendUserFacingGenerationError(res, 400);
     }
 
     const pointCost = shouldUseBilling ? getRoutePointCost(route, requestBody.n, requestBody) : 0;
@@ -3277,7 +3305,6 @@ app.post("/api/edit", generateLimiter, async (req, res) => {
         : response.data,
     );
   } catch (error) {
-    if (sendBillingError(res, error)) return;
     if (billingCharge?.chargeId && billingAccount?.accountId && !localTaskId) {
       await refundPoints(billingAccount.accountId, billingCharge.chargeId, {
         reason: "request_failed",
@@ -3285,13 +3312,7 @@ app.post("/api/edit", generateLimiter, async (req, res) => {
       });
     }
     console.error("[Edit] Error:", error.message);
-    if (error.response) {
-      res.status(error.response.status).json(error.response.data);
-    } else if (error.code === "ECONNABORTED") {
-      res.status(504).json({ error: "Request timed out while editing image" });
-    } else {
-      res.status(500).json({ error: error.message || "Image edit failed" });
-    }
+    respondWithUserFacingGenerationError(res, error, 500);
   }
 });
 app.get("/api/proxy/image", async (req, res) => {
@@ -3343,12 +3364,8 @@ app.get("/api/task/:taskId", pollingLimiter, async (req, res) => {
           })
         : null) || (await resolveImageRoute(undefined, { includeInactive: true }));
 
-    if (!route?.taskPath) {
-      return res.status(400).json({ error: "This image route does not support task polling" });
-    }
-
-    if (!isOpenAiImageRoute(route)) {
-      return res.status(400).json({ error: "Unsupported route for task polling" });
+    if (!route?.taskPath || !isOpenAiImageRoute(route)) {
+      return sendUserFacingGenerationError(res, 400);
     }
 
     const upstreamTaskId = decodedTask?.upstreamTaskId || encodedTask;
@@ -3402,12 +3419,7 @@ app.get("/api/task/:taskId", pollingLimiter, async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error("[Task Poll] Error:", error.message);
-
-    if (error.response) {
-      res.status(error.response.status).json(error.response.data);
-    } else {
-      res.status(500).json({ error: error.message || "Image task polling failed" });
-    }
+    respondWithUserFacingGenerationError(res, error, 500);
   }
 });
 app.post("/api/gemini/generate", generateLimiter, async (req, res) => {
@@ -3422,14 +3434,8 @@ app.post("/api/gemini/generate", generateLimiter, async (req, res) => {
     const route = await resolveImageRoute(requestBody.routeId);
     const requestedImageModel = await resolveRequestedImageModel(requestBody);
 
-    if (!route) {
-      return res.status(400).json({ error: "No available Gemini image route" });
-    }
-
-    if (!isGeminiNativeRoute(route)) {
-      return res.status(400).json({
-        error: `Route ${route.id} is not configured for Gemini native generation`,
-      });
+    if (!route || !isGeminiNativeRoute(route)) {
+      return sendUserFacingGenerationError(res, 400);
     }
 
     billingAccount = await requireBillingAccount(req);
@@ -3498,7 +3504,6 @@ app.post("/api/gemini/generate", generateLimiter, async (req, res) => {
       },
     });
   } catch (error) {
-    if (sendBillingError(res, error)) return;
     if (billingCharge?.chargeId) {
       await refundPoints(billingAccount.accountId, billingCharge.chargeId, {
         reason: "request_failed",
@@ -3530,20 +3535,7 @@ app.post("/api/gemini/generate", generateLimiter, async (req, res) => {
       status: error.response?.status,
       response: error.response?.data,
     });
-
-    if (error.response) {
-      const errData = error.response.data;
-      const errMsg =
-        errData?.error?.message ||
-        (typeof errData === "string" ? errData : JSON.stringify(errData));
-      res.status(error.response.status).json({ error: errMsg });
-    } else if (error.code === "ECONNABORTED") {
-      res.status(504).json({ error: "Gemini image request timed out" });
-    } else if (isRetryableNetworkError(error)) {
-      res.status(502).json({ error: NON_IDEMPOTENT_UPSTREAM_ERROR_MESSAGE });
-    } else {
-      res.status(500).json({ error: error.message || "Gemini image generation failed" });
-    }
+    respondWithUserFacingGenerationError(res, error, 500);
   }
 });
 // ==================== Video Generation ====================
@@ -3556,7 +3548,7 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
     const route = await resolveVideoRoute(requestBody?.routeId);
     const requestedVideoModel = await resolveRequestedVideoModel(requestBody);
     if (!route) {
-      return res.status(400).json({ error: "No available video route" });
+      return sendUserFacingGenerationError(res, 400);
     }
 
     delete requestBody.routeId;
@@ -3713,11 +3705,7 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
       errorMessage: error.message,
     });
     console.error("[Video Generate] Error:", error.message);
-    if (error.response) {
-      res.status(error.response.status).json(error.response.data);
-    } else {
-      res.status(500).json({ error: error.message || "Video generation failed" });
-    }
+    respondWithUserFacingGenerationError(res, error, 500);
   }
 });
 
@@ -3736,7 +3724,7 @@ app.get("/api/video/task/:taskId", pollingLimiter, async (req, res) => {
         : null) || (await resolveVideoRoute(undefined, { includeInactive: true }));
 
     if (!route?.taskPath) {
-      return res.status(400).json({ error: "This video route does not support task polling" });
+      return sendUserFacingGenerationError(res, 400);
     }
 
     const useUserProvidedApiKey = shouldUseUserProvidedApiKey(
@@ -3803,11 +3791,7 @@ app.get("/api/video/task/:taskId", pollingLimiter, async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error("[Video Task Poll] Error:", error.message);
-    if (error.response) {
-      res.status(error.response.status).json(error.response.data);
-    } else {
-      res.status(500).json({ error: error.message || "Video task polling failed" });
-    }
+    respondWithUserFacingGenerationError(res, error, 500);
   }
 });
 

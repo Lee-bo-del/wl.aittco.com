@@ -47,6 +47,9 @@ import ImageModelIcon from './ImageModelIcon';
 
 import logo from '../src/assets/logo.svg';
 
+const USER_FACING_GENERATION_ERROR_MESSAGE =
+  '请检查提示词或参考图，可能触发了安全限制，请更换后重试';
+
 interface ControlPanelProps {
   onInitGenerations: (count: number, prompt: string, aspectRatio?: string, baseNode?: NodeData, type?: 'IMAGE' | 'VIDEO') => string[];
   onUpdateGeneration: (id: string, src: string | null, error?: string, taskId?: string) => void;
@@ -932,11 +935,12 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
                } else if (res.url) {
                  onUpdateGeneration(pid, res.url);
                } else {
-                 onUpdateGeneration(pid, null, "未知返回格式");
+                 onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE);
                }
             })
             .catch((err: any) => { 
-              onUpdateGeneration(pid, null, err.message || "生成失败"); 
+              void err;
+              onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE); 
             });
         });
       }
@@ -1063,20 +1067,15 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
               // Fail remaining placeholders if any
               if (generatedImages.length < quantity) {
                 for (let i = generatedImages.length; i < quantity; i++) {
-                   onUpdateGeneration(placeholderIds[i], null, "未返回足够的生成结果");
+                   onUpdateGeneration(placeholderIds[i], null, USER_FACING_GENERATION_ERROR_MESSAGE);
                 }
               }
             } else {
-              // Try to find error message in various formats
-              const errorMsg = res.error?.message || 
-                               res.error || 
-                               (res.candidates?.[0]?.finishReason ? `生成终止: ${res.candidates[0].finishReason}` : null) ||
-                               "接口未返回生成结果（或图片生成被安全拦截）";
-              throw new Error(errorMsg);
+              throw new Error(USER_FACING_GENERATION_ERROR_MESSAGE);
             }
           } catch (err: any) {
             console.error("Gemini Native Call Error:", err);
-            placeholderIds.forEach(pid => onUpdateGeneration(pid, null, err.message || "生成异常"));
+            placeholderIds.forEach(pid => onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE));
           }
         };
 
@@ -1111,26 +1110,27 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
                     const item = res.data[res.data.length - 1];
                     if (item?.url) onUpdateGeneration(placeholderIds[0], item.url);
                     else if (item?.b64_json) onUpdateGeneration(placeholderIds[0], `data:image/png;base64,${item.b64_json}`);
-                    else onUpdateGeneration(placeholderIds[0], null, "未返回图片结果");
+                    else onUpdateGeneration(placeholderIds[0], null, USER_FACING_GENERATION_ERROR_MESSAGE);
                   } else {
                     placeholderIds.forEach((pid, idx) => {
                       const item = res.data[idx];
                       if (item?.url) onUpdateGeneration(pid, item.url);
                       else if (item?.b64_json) onUpdateGeneration(pid, `data:image/png;base64,${item.b64_json}`);
-                      else onUpdateGeneration(pid, null, "未返回图片结果");
+                      else onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE);
                     });
                   }
                 } else if (res.url) {
                   onUpdateGeneration(placeholderIds[0], res.url);
                   for (let i = 1; i < placeholderIds.length; i++) {
-                    onUpdateGeneration(placeholderIds[i], null, "未返回第2张图片");
+                    onUpdateGeneration(placeholderIds[i], null, USER_FACING_GENERATION_ERROR_MESSAGE);
                   }
                 } else {
-                  placeholderIds.forEach(pid => onUpdateGeneration(pid, null, "未知返回格式"));
+                  placeholderIds.forEach(pid => onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE));
                 }
               })
               .catch((err: any) => {
-                placeholderIds.forEach(pid => onUpdateGeneration(pid, null, err.message));
+                void err;
+                placeholderIds.forEach(pid => onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE));
               });
           }
         };
@@ -1188,7 +1188,10 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
               image: collageBase64.split(',')[1],
               images: [collageBase64.split(',')[1]]
             }, compositePrompt);
-          }).catch((err: any) => { setError(err.message); });
+          }).catch((err: any) => {
+            void err;
+            setError(USER_FACING_GENERATION_ERROR_MESSAGE);
+          });
         }
 	            } else {
         const promptForModel = getGrokPrompt(currentPrompt, modelName);
@@ -1215,26 +1218,27 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
                   const item = res.data[res.data.length - 1];
                   if (item?.url) onUpdateGeneration(placeholderIds[0], item.url);
                   else if (item?.b64_json) onUpdateGeneration(placeholderIds[0], `data:image/png;base64,${item.b64_json}`);
-                  else onUpdateGeneration(placeholderIds[0], null, "未返回图片结果");
+                  else onUpdateGeneration(placeholderIds[0], null, USER_FACING_GENERATION_ERROR_MESSAGE);
                 } else {
                   placeholderIds.forEach((pid, idx) => {
                     const item = res.data[idx];
                     if (item?.url) onUpdateGeneration(pid, item.url);
                     else if (item?.b64_json) onUpdateGeneration(pid, `data:image/png;base64,${item.b64_json}`);
-                    else onUpdateGeneration(pid, null, "未返回图片结果");
+                    else onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE);
                   });
                 }
               } else if (res.url) {
                 onUpdateGeneration(placeholderIds[0], res.url);
                 for (let i = 1; i < placeholderIds.length; i++) {
-                  onUpdateGeneration(placeholderIds[i], null, "未返回第2张图片");
+                  onUpdateGeneration(placeholderIds[i], null, USER_FACING_GENERATION_ERROR_MESSAGE);
                 }
               } else {
-                placeholderIds.forEach(pid => onUpdateGeneration(pid, null, "未知返回格式"));
+                placeholderIds.forEach(pid => onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE));
               }
             })
             .catch((err: any) => {
-              placeholderIds.forEach(pid => onUpdateGeneration(pid, null, err.message || "生成失败"));
+              void err;
+              placeholderIds.forEach(pid => onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE));
             });
         }
       }
@@ -1397,7 +1401,8 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
       });
       onUpdateGeneration(pid, videoUrl);
     } catch (err: any) {
-      onUpdateGeneration(pid, null, err.message || "视频生成失败");
+      void err;
+      onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE);
     }
   };
 

@@ -8,6 +8,8 @@
   const MODEL_STORAGE_KEY = "nb_image_model";
   const LINE_STORAGE_KEY = "nb_line";
   const KEY_STORAGE_KEY = "nb_key";
+  const USER_FACING_GENERATION_ERROR_MESSAGE =
+    "请检查提示词或参考图，可能触发了安全限制，请更换后重试";
   const SIZE_LABELS = {
     "1k": "1K (标准)",
     "2k": "2K (高清)",
@@ -1599,7 +1601,7 @@
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.error?.message || data?.error || data?.message || `任务 ${index} 提交失败`);
+        throw new Error(USER_FACING_GENERATION_ERROR_MESSAGE);
       }
       if (data.warning) {
         showSoftToast(String(data.warning));
@@ -1643,7 +1645,7 @@
     } catch (error) {
       console.error("[Classic Bridge] submit task failed:", error);
       if (!canUpdateMainUi(options.runToken, options.trackUi !== false)) return;
-      handleSingleError(error?.message || "任务提交失败", size);
+      handleSingleError(USER_FACING_GENERATION_ERROR_MESSAGE, size);
     }
   };
   pollSingleTask = async function (taskId, key, size, index, options = {}) {
@@ -1662,7 +1664,7 @@
           removePendingTask(taskId);
           removePendingTaskFromGallery(taskId);
           if (canUpdateMainUi(options.runToken, trackUi)) {
-            handleSingleError(`任务 ${index} 查询超时，任务状态未收敛`, size);
+            handleSingleError(USER_FACING_GENERATION_ERROR_MESSAGE, size);
           }
           return;
         }
@@ -1681,7 +1683,7 @@
           removePendingTask(taskId);
           removePendingTaskFromGallery(taskId);
           if (canUpdateMainUi(options.runToken, trackUi)) {
-            handleSingleError(`任务 ${index} 已失效或未找到 (404)`, size);
+            handleSingleError(USER_FACING_GENERATION_ERROR_MESSAGE, size);
           }
           return;
         }
@@ -1723,7 +1725,7 @@
             removePendingTask(taskId);
             removePendingTaskFromGallery(taskId);
             if (canUpdateMainUi(options.runToken, trackUi)) {
-              handleSingleError(`任务 ${index} 返回成功但未提供图片链接`, size);
+              handleSingleError(USER_FACING_GENERATION_ERROR_MESSAGE, size);
             }
           }
           return;
@@ -1734,7 +1736,7 @@
           removePendingTask(taskId);
           removePendingTaskFromGallery(taskId);
           if (canUpdateMainUi(options.runToken, trackUi)) {
-            handleSingleError(`任务 ${index} 生成失败`, size);
+            handleSingleError(USER_FACING_GENERATION_ERROR_MESSAGE, size);
           }
         }
       } catch (error) {
@@ -1745,7 +1747,7 @@
           removePendingTask(taskId);
           removePendingTaskFromGallery(taskId);
           if (canUpdateMainUi(options.runToken, trackUi)) {
-            handleSingleError(`任务 ${index} 查询连接持续失败`, size);
+            handleSingleError(USER_FACING_GENERATION_ERROR_MESSAGE, size);
           }
         }
       }
