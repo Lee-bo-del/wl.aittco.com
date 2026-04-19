@@ -1237,9 +1237,19 @@ const executeGeminiNativeGenerate = async ({
 
   const camelParts = [{ text: prompt }];
   const snakeParts = [{ text: prompt }];
+  const seenImageParts = new Set();
   const appendImagePart = (img) => {
-    camelParts.push(processImagePart(img, { camelCase: true }));
-    snakeParts.push(processImagePart(img));
+    if (Array.isArray(img)) {
+      img.forEach((item) => appendImagePart(item));
+      return;
+    }
+    if (typeof img !== "string") return;
+    const normalized = String(img || "").trim();
+    if (!normalized) return;
+    if (seenImageParts.has(normalized)) return;
+    seenImageParts.add(normalized);
+    camelParts.push(processImagePart(normalized, { camelCase: true }));
+    snakeParts.push(processImagePart(normalized));
   };
 
   if (Array.isArray(requestBody.images)) {
@@ -1248,7 +1258,7 @@ const executeGeminiNativeGenerate = async ({
     });
   }
 
-  if (requestBody.image) {
+  if (requestBody.image !== undefined && requestBody.image !== null) {
     appendImagePart(requestBody.image);
   }
 
@@ -2960,6 +2970,57 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
     }
 
     console.log("[Generate] Upstream response:", response.data);
+    const immediateResultUrls = extractResultUrlsFromPayload(response.data);
+    const upstreamStatus = extractResultStatus(response.data);
+    const shouldTreatAsImmediateResult =
+      immediateResultUrls.length > 0 &&
+      (
+        isVisionaryImageRoute(route) ||
+        ["SUCCEEDED", "SUCCESS", "COMPLETED"].includes(upstreamStatus)
+      );
+    if (shouldTreatAsImmediateResult) {
+      const immediatePayload = {
+        ...response.data,
+        url:
+          response.data?.url ||
+          response.data?.image_url ||
+          immediateResultUrls[0] ||
+          null,
+        image_url:
+          response.data?.image_url ||
+          response.data?.url ||
+          immediateResultUrls[0] ||
+          null,
+        images: Array.isArray(response.data?.images)
+          ? response.data.images
+          : immediateResultUrls,
+      };
+      await completeGenerationRecordSuccessSafe({
+        recordId: generationRecord?.id,
+        resultUrls: immediateResultUrls,
+        previewUrl: immediateResultUrls[0] || null,
+        outputSize: requestBody.size || requestBody.image_size || null,
+        aspectRatio: requestBody.aspect_ratio || null,
+        meta: {
+          transport: route.transport,
+          routeMode: route.mode,
+          upstreamStatus,
+          settled: "immediate_result",
+        },
+      });
+      return res.json(
+        shouldUseBilling
+          ? {
+              ...immediatePayload,
+              billing: {
+                deductedPoints: pointCost,
+                remainingPoints: billingCharge?.account?.points,
+              },
+            }
+          : immediatePayload,
+      );
+    }
+
     const upstreamTaskId =
       response.data?.id ||
       response.data?.task_id ||
