@@ -119,11 +119,20 @@ const ensureBillingSchema = async () => {
 
       const ensureOneDecimalColumn = async (tableName, columnName, definition) => {
         const [rows] = await pool.execute(
-          `SHOW COLUMNS FROM ${tableName} LIKE ?`,
-          [columnName],
+          `
+            SELECT DATA_TYPE, NUMERIC_SCALE
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+              AND COLUMN_NAME = ?
+            LIMIT 1
+          `,
+          [tableName, columnName],
         );
-        const typeText = String(rows?.[0]?.Type || "").toLowerCase();
-        if (/^decimal\(\d+,\s*1\)$/.test(typeText)) return;
+        const row = rows?.[0] || null;
+        const dataType = String(row?.DATA_TYPE || "").toLowerCase();
+        const numericScale = Number.parseInt(String(row?.NUMERIC_SCALE ?? "-1"), 10);
+        if (dataType === "decimal" && numericScale === 1) return;
         await pool.execute(
           `ALTER TABLE ${tableName} MODIFY COLUMN ${columnName} ${definition}`,
         );
