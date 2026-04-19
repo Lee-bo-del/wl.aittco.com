@@ -762,12 +762,13 @@ body {
 .brand-title {
   font-size: 4rem;
   font-weight: 800;
-  letter-spacing: -2px;
+  letter-spacing: 1px;
   margin: 0;
   background: linear-gradient(
     135deg,
-    var(--blue-grad-start),
-    var(--blue-grad-end)
+    #7be3ff 0%,
+    #2db6ff 45%,
+    #1168f0 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -795,32 +796,32 @@ body {
   width: 100%;
 }
 .brand-badge-4k {
-  font-size: 1.5rem;
-  font-weight: 900;
+  font-size: 1.1rem;
+  font-weight: 800;
   font-style: italic;
-  background: var(--banana);
-  color: #000;
-  padding: 4px 12px;
+  background: linear-gradient(135deg, #ff4d4f, #ff1f1f);
+  color: #fff;
+  padding: 6px 14px;
   border-radius: 4px;
   display: inline-block;
   transform: skewX(-10deg);
-  box-shadow: 0 0 15px var(--banana-glow);
+  box-shadow: 0 0 15px rgba(255, 59, 59, 0.55);
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   white-space: nowrap;
   flex-shrink: 0;
 }
 .brand-container:hover .brand-badge-4k {
   transform: skewX(-10deg) scale(1.1) rotate(5deg);
-  box-shadow: 0 0 25px var(--banana);
+  box-shadow: 0 0 25px rgba(255, 59, 59, 0.75);
 }
 .brand-sub {
-  font-family: monospace;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   color: var(--text-sub);
   font-size: 12px;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   margin-top: 8px;
   opacity: 0.6;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 @media (max-width: 768px) {

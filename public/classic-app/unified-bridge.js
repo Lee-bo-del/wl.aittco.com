@@ -560,26 +560,25 @@
     }
   };
   const updateBrandHeader = () => {
-    const currentModel = getCurrentModel();
     const titleEl = document.getElementById("brandTitleText");
     const subEl = document.getElementById("brandSubText");
     const badgeEl = document.getElementById("brandBadge4k");
 
     if (titleEl) {
-      titleEl.textContent = currentModel?.label || "Classic Create";
+      titleEl.textContent = "武陵商城";
     }
     if (subEl) {
       if (isSessionAuthenticated()) {
-        subEl.textContent = "统一账户已连接，当前使用主站登录与点数";
+        subEl.textContent = "企业账号已连接，可使用站内点数与模型";
       } else if (getStoredApiKey()) {
-        subEl.textContent = "旧 Key 兼容模式已启用，可直连兼容线路";
+        subEl.textContent = "已启用 API Key 模式，可使用兼容线路";
       } else {
-        subEl.textContent = "登录后可使用全部模型；旧 API Key 兼容部分线路";
+        subEl.textContent = "请先登录企业账号或输入有效 API Key";
       }
     }
     if (badgeEl) {
-      const supports4k = (currentModel?.sizeOptions || []).includes("4k");
-      badgeEl.style.display = supports4k ? "inline-flex" : "none";
+      badgeEl.style.display = "inline-flex";
+      badgeEl.textContent = "武陵商城";
     }
   };
   const updateLegacyAdminVisibility = () => {

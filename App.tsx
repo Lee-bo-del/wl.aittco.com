@@ -19,7 +19,6 @@ import { MainLayout } from "./src/layouts/MainLayout";
 import { ModalsContainer } from "./src/layouts/ModalsContainer";
 import { assetStorage } from "./src/services/assetStorage";
 import { isLowEndDevice } from "./src/utils/performance";
-import wechatQr from "./wechat.png";
 
 // New Hooks
 import { useTaskRecovery } from "./src/hooks/useTaskRecovery";
@@ -572,9 +571,14 @@ const App: React.FC = () => {
 
         {nodes.length === 0 && status === AppStatus.IDLE && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center select-none w-full max-w-2xl mt-[-5vh]">
-            <h1 className="text-3xl font-light text-white tracking-[0.3em] uppercase opacity-40 mb-12 flex items-center justify-center font-sans">
-              Nano Banana Pro
-            </h1>
+            <div className="mb-12 flex items-end justify-center gap-3">
+              <h1 className="text-4xl font-black tracking-tight leading-none bg-gradient-to-b from-sky-300 via-cyan-400 to-blue-600 bg-clip-text text-transparent sm:text-5xl">
+                武陵商城
+              </h1>
+              <span className="inline-flex items-center rounded-md border border-red-300/35 bg-linear-to-r from-red-500 to-red-600 px-3 py-1 text-sm font-bold text-white shadow-[0_0_18px_rgba(239,68,68,0.38)]">
+                武陵商城
+              </span>
+            </div>
 
             <div className="flex flex-col items-center bg-[#121212]/60 backdrop-blur-xl p-10 rounded-[32px] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.5)] max-w-lg text-center relative pointer-events-auto">
               <div className="absolute top-6 right-6 flex h-3 w-3">
@@ -593,7 +597,7 @@ const App: React.FC = () => {
               </h2>
 
               <p className="text-gray-400 text-sm leading-relaxed mb-8 max-w-sm">
-                现在支持注册、密码登录、点数账本和管理员后台。打开设置即可登录账户并管理用户。
+                武陵商城企业创作平台已启用。请先登录企业账号，再使用创作与管理能力。
               </p>
 
               <button
@@ -605,17 +609,9 @@ const App: React.FC = () => {
                 <span className="relative z-10">登录 / 管理账户</span>
               </button>
 
-              <div className="mt-6 flex flex-col items-center">
-                <div className="rounded-2xl border border-white/15 bg-white/5 p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
-                  <img
-                    src={wechatQr}
-                    alt="WeChat QR"
-                    className="h-28 w-28 rounded-xl object-cover sm:h-32 sm:w-32"
-                    loading="lazy"
-                  />
-                </div>
-                <p className="mt-2 text-xs text-gray-400">扫码联系支持，手动充值点数</p>
-              </div>
+              <p className="mt-5 rounded-xl border border-cyan-400/20 bg-cyan-500/8 px-4 py-2 text-xs text-cyan-100/80">
+                站点已切换为武陵商城专属版本，外部购买与客服入口已关闭。
+              </p>
             </div>
 
             <div className="mt-8 px-6 py-2.5 bg-white/[0.03] rounded-full border border-white/5 text-xs text-gray-500 flex items-center gap-2.5 backdrop-blur-sm">

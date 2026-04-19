@@ -1,11 +1,10 @@
 ﻿import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { X, Key, CreditCard, ShoppingCart, Loader2, History, Settings, RotateCcw, Trash2, Eye, EyeOff, Download, ImagePlus, Maximize2, DownloadCloud, Info, Film, AlertCircle, ChevronLeft, ChevronRight, ShieldCheck, Save } from 'lucide-react';
+import { X, Key, CreditCard, Loader2, History, Settings, RotateCcw, Trash2, Eye, EyeOff, Download, ImagePlus, Maximize2, DownloadCloud, Info, Film, AlertCircle, ChevronLeft, ChevronRight, ShieldCheck, Save } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { checkBalance } from '../services/geminiService';
 import { useHistoryStore } from '../src/store/historyStore';
 import { useSelectionStore } from '../src/store/selectionStore';
-import wechatQR from '../src/assets/wechat_qr.png';
 import GlassModal from './GlassModal';
 import CoinIcon from './CoinIcon';
 import AuthPanel from './AuthPanel';
@@ -646,20 +645,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       onClick={handleCheckBalance}
                       disabled={isCheckingBal}
-                      className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white text-sm py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
+                      className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white text-sm py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
                     >
                       {isCheckingBal ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
                       查询余额
                     </button>
-                    <a
-                      href="https://item.taobao.com/item.htm?id=975150888957"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex-1 bg-linear-to-r from-orange-500/20 to-red-500/20 hover:from-orange-500/30 hover:to-red-500/30 border border-orange-500/30 text-orange-200 hover:text-orange-100 text-sm py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 no-underline"
-                    >
-                      <ShoppingCart size={16} />
-                      购买额度
-                    </a>
                   </div>
                 </>
               )}
@@ -726,10 +716,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               )}
 
-              {/* Tech Support */}
-              {/* Tech Support - Premium Card Style */}
-              {/* Tech Support - Premium Card Style (Moved to bottom left absolute) */}
-
               {authSession?.user?.isAdmin === true && (
                 <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-xs text-cyan-100/80">
                   公告管理已迁移到独立后台。请前往 <span className="font-medium text-cyan-50">/admin</span> 中的“公告管理”页面进行发布、置顶、启停和删除。
@@ -744,22 +730,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 	                </div>
 	              )}
 
-	              {/* Tech Support QR (in normal flow to avoid covering balance cards) */}
-	              <div className="pt-2 flex flex-col items-center gap-2">
-	                <div
-	                  onClick={() => onViewImage && onViewImage(wechatQR)}
-	                  className="bg-white/10 backdrop-blur-md rounded-xl p-2 border border-white/10 shadow-2xl group hover:scale-105 transition-transform duration-300 cursor-zoom-in"
-	                  title="点击放大展示二维码"
-	                >
-	                  <img
-	                    src={wechatQR}
-	                    alt="WeChat QR"
-	                    className="w-24 h-24 rounded-lg opacity-90 group-hover:opacity-100 transition-opacity"
-	                  />
-	                </div>
-	                <div className="text-[10px] font-medium text-gray-500 uppercase tracking-[0.2em] opacity-50">
-	                  扫码联系技术支持
-	                </div>
+	              <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 text-xs text-blue-100/80">
+	                当前站点为武陵商城专属版，已移除外部购买与客服入口，账号点数请通过站内流程管理。
 	              </div>
 	            </div>
 	          ) : (

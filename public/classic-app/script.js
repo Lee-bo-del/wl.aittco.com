@@ -914,16 +914,6 @@ function closeBalanceModal(e) {
   }
 }
 
-function openSupportModal() {
-  const modal = document.getElementById("supportModal");
-  if (modal) modal.style.display = "flex";
-}
-
-function closeSupportModal() {
-  const modal = document.getElementById("supportModal");
-  if (modal) modal.style.display = "none";
-}
-
 // 图片压缩与上传逻辑
 function compressImage(file) {
   return new Promise((resolve) => {

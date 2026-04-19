@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
 
-    <title>BananaPro 4K</title>
+    <title>武陵商城创作平台</title>
 
     <link
       rel="icon"
@@ -93,18 +93,10 @@
 
     <div class="hero-header">
       <div class="brand-container">
-        <a
-          href="https://item.taobao.com/item.htm?id=975150888957"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="brand-title"
-          id="brandTitleText"
-        >
-          Nano Banana <span class="brand-pro">PRO</span>
-        </a>
-        <span class="brand-badge-4k" id="brandBadge4k">4K</span>
+        <h1 class="brand-title" id="brandTitleText">武陵商城</h1>
+        <span class="brand-badge-4k" id="brandBadge4k">武陵商城</span>
       </div>
-      <div class="brand-sub" id="brandSubText">Powered By Gemini-3-Pro-Preview</div>
+      <div class="brand-sub" id="brandSubText">企业智能创作平台</div>
     </div>
 
     <!-- TAB 1: CREATE -->
@@ -744,12 +736,6 @@
                 </div>
               </div>
 
-              <div class="classic-settings-card classic-settings-support-card">
-                <div class="classic-support-inline" onclick="openSupportModal()">
-                  <img class="classic-support-inline-qr" src="/classic-app/wechat.png" alt="微信客服二维码" />
-                  <div class="classic-support-inline-text">扫码联系技术支持</div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -798,22 +784,6 @@
               style="flex: 1; justify-content: center; padding: 12px"
             >
               <span style="font-size: 16px">🔍</span> 查询余额
-            </button>
-            <a
-              href="https://item.taobao.com/item.htm?id=975150888957"
-              target="_blank"
-              class="action-btn buy-btn"
-              style="flex: 1; justify-content: center; padding: 12px"
-            >
-              <span style="font-size: 16px">🛒</span> 购买额度
-            </a>
-            <button
-              class="action-btn support-btn"
-              id="supportBtn"
-              onclick="openSupportModal()"
-              style="flex: 1; justify-content: center; padding: 12px"
-            >
-              <span style="font-size: 16px">💬</span> 联系客服
             </button>
           </div>
           <div class="auth-inline-note" id="classicApiKeyHint" style="margin-top: 12px">
@@ -881,22 +851,6 @@
             document.getElementById('balanceModal').style.display = 'none'
           "
         >
-          关闭
-        </button>
-      </div>
-    </div>
-
-    <div
-      id="supportModal"
-      class="support-modal"
-      style="display: none"
-      onclick="if(event.target===this) closeSupportModal()"
-    >
-      <div class="support-card">
-        <div class="support-title">联系客服</div>
-        <div class="support-desc">微信扫码联系人工客服</div>
-        <img class="support-qr" src="/classic-app/wechat.png" alt="微信客服二维码" />
-        <button class="support-close-btn" onclick="closeSupportModal()">
           关闭
         </button>
       </div>
