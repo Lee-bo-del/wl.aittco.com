@@ -29,6 +29,29 @@ export interface VideoModelCatalogShape {
   models: VideoModelConfig[];
 }
 
+const EMPTY_VIDEO_MODEL: VideoModelConfig = {
+  id: '__no_video_model__',
+  label: 'No Video Model',
+  description: 'No active video model is available.',
+  modelFamily: 'default',
+  routeFamily: 'default',
+  requestModel: '',
+  selectorCost: 0,
+  maxReferenceImages: 0,
+  referenceLabels: [],
+  defaultAspectRatio: '16:9',
+  aspectRatioOptions: ['16:9'],
+  defaultDuration: '4',
+  durationOptions: ['4'],
+  supportsHd: false,
+  defaultHd: false,
+  isActive: false,
+  isDefaultModel: false,
+  sortOrder: Number.MAX_SAFE_INTEGER,
+  createdAt: null,
+  updatedAt: null,
+};
+
 const API_BASE_URL =
   typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? 'http://localhost:3325/api'
@@ -160,7 +183,8 @@ export const getVideoModelById = (modelId?: string): VideoModelConfig => {
   return (
     VIDEO_MODELS().find((model) => model.id === normalized) ||
     VIDEO_MODELS().find((model) => model.id === DEFAULT_VIDEO_MODEL_ID()) ||
-    VIDEO_MODELS()[0]
+    VIDEO_MODELS()[0] ||
+    EMPTY_VIDEO_MODEL
   );
 };
 

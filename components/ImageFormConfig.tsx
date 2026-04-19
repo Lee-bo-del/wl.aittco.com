@@ -170,7 +170,7 @@ export const ImageFormConfig: React.FC<ImageFormConfigProps> = ({
   if (visibleImageModels.length === 0) {
     return (
       <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs leading-6 text-gray-400">
-        No image models are currently available for direct API Key use.
+        当前没有可用的图片模型，请联系管理员在后台启用模型后再试。
       </div>
     );
   }

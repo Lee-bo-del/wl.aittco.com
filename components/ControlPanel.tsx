@@ -25,6 +25,7 @@ import {
 import {
   getImageModelById,
   getImageModelEffectiveRequestSize,
+  getImageModelOptions,
 } from '../src/config/imageModels';
 import { useImageRouteCatalog } from '../src/hooks/useImageRouteCatalog';
 import { useImageModelCatalog } from '../src/hooks/useImageModelCatalog';
@@ -36,6 +37,7 @@ import {
 import {
   getVideoModelById,
   getVideoModelMaxReferenceImages,
+  getVideoModelOptions,
   getVideoModelReferenceLabels,
 } from '../src/config/videoModels';
 import { getSelectedVideoRoute, getVideoModelNameForRoute } from '../src/config/videoRoutes';
@@ -324,6 +326,15 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
     generationAccessState === 'authenticated' ||
     generationAccessState === 'valid_api_key';
   const isCheckingGenerationAccess = generationAccessState === 'checking';
+  const hasAvailableImageModel =
+    getImageModelOptions().length > 0 &&
+    selectedImageModelConfig.id !== '__no_image_model__';
+  const hasAvailableVideoModel =
+    getVideoModelOptions().length > 0 &&
+    selectedVideoModelConfig.id !== '__no_video_model__';
+  const hasAvailableGenerationModel = isVideoMode
+    ? hasAvailableVideoModel
+    : hasAvailableImageModel;
 
 
 
@@ -2080,6 +2091,12 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
               </div>
             )}
 
+            {hasUnlockedGenerationAccess && !hasAvailableGenerationModel && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-900/20 px-3 py-2 text-xs text-amber-200">
+                当前没有可用模型，请联系管理员在后台启用后再试。
+              </div>
+            )}
+
             {error && (
               <div className="text-red-400 text-xs bg-red-900/20 border border-red-800/50 rounded p-2">{error}</div>
             )}
@@ -2090,12 +2107,14 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
                 isGenerating ||
                 isCheckingGenerationAccess ||
                 !hasUnlockedGenerationAccess ||
+                !hasAvailableGenerationModel ||
                 (!prompt.trim() && toolMode !== ToolMode.INPAINT)
               }
               className={`w-full ${isMobile ? 'py-3.5 rounded-xl text-base min-h-[50px]' : 'py-2.5 rounded-lg text-sm'} font-medium flex items-center justify-center gap-2 transition-all touch-manipulation active:scale-[0.98] ${
                 isGenerating ||
                 isCheckingGenerationAccess ||
                 !hasUnlockedGenerationAccess ||
+                !hasAvailableGenerationModel ||
                 (!prompt.trim() && toolMode !== ToolMode.INPAINT)
                   ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
                   : 'bg-linear-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white shadow-lg'
@@ -2107,6 +2126,8 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
                 <><Loader2 size={16} className="animate-spin" />正在验证访问权限...</>
               ) : !hasUnlockedGenerationAccess ? (
                 <><ShieldCheck size={16} />请先登录或验证 Key</>
+              ) : !hasAvailableGenerationModel ? (
+                <>暂无可用模型</>
               ) : (
                 <>
                   {toolMode === ToolMode.INPAINT ? <Zap size={16} /> : (isVideoMode ? <Film size={16} /> : <Wand2 size={16} />)}

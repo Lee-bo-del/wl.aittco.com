@@ -57,6 +57,34 @@ export interface ImageRouteOption {
   isDirectUserApiKeyCompatible?: boolean;
 }
 
+const EMPTY_IMAGE_ROUTE: ImageRouteConfig = {
+  id: '__no_image_route__',
+  label: 'No Route',
+  description: 'No active route is available.',
+  modelFamily: 'default',
+  line: 'default',
+  transport: 'openai-image',
+  mode: 'async',
+  baseUrl: '',
+  generatePath: '/v1/images/generations',
+  taskPath: '',
+  editPath: '',
+  chatPath: '',
+  upstreamModel: '',
+  useRequestModel: true,
+  allowUserApiKeyWithoutLogin: false,
+  apiKeyEnv: '',
+  pointCost: 0,
+  sizeOverrides: {},
+  isActive: false,
+  isDefaultRoute: false,
+  isDefaultNanoBananaLine: false,
+  sortOrder: Number.MAX_SAFE_INTEGER,
+  hasApiKey: false,
+  createdAt: null,
+  updatedAt: null,
+};
+
 const API_BASE_URL =
   typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? 'http://localhost:3355/api'
@@ -228,7 +256,8 @@ export const getImageRouteById = (routeId?: string): ImageRouteConfig => {
   return (
     IMAGE_ROUTES().find((route) => route.id === routeId) ||
     IMAGE_ROUTES().find((route) => route.id === DEFAULT_IMAGE_ROUTE_ID()) ||
-    IMAGE_ROUTES()[0]
+    IMAGE_ROUTES()[0] ||
+    EMPTY_IMAGE_ROUTE
   );
 };
 

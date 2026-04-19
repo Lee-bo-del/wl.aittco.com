@@ -34,6 +34,30 @@ export interface VideoRouteCatalogShape {
   routes: VideoRouteConfig[];
 }
 
+const EMPTY_VIDEO_ROUTE: VideoRouteConfig = {
+  id: '__no_video_route__',
+  label: 'No Route',
+  description: 'No active route is available.',
+  routeFamily: 'default',
+  line: 'default',
+  transport: 'openai-video',
+  mode: 'async',
+  baseUrl: '',
+  generatePath: '/v2/videos/generations',
+  taskPath: '',
+  upstreamModel: '',
+  useRequestModel: true,
+  allowUserApiKeyWithoutLogin: false,
+  apiKeyEnv: '',
+  pointCost: 0,
+  isActive: false,
+  isDefaultRoute: false,
+  sortOrder: Number.MAX_SAFE_INTEGER,
+  hasApiKey: false,
+  createdAt: null,
+  updatedAt: null,
+};
+
 const API_BASE_URL =
   typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? 'http://localhost:3325/api'
@@ -147,7 +171,8 @@ export const getVideoRouteById = (routeId?: string): VideoRouteConfig => {
   return (
     VIDEO_ROUTES().find((route) => route.id === routeId) ||
     VIDEO_ROUTES().find((route) => route.id === DEFAULT_VIDEO_ROUTE_ID()) ||
-    VIDEO_ROUTES()[0]
+    VIDEO_ROUTES()[0] ||
+    EMPTY_VIDEO_ROUTE
   );
 };
 
