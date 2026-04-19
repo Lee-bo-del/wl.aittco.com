@@ -26,6 +26,7 @@ import {
   fetchBillingCenter,
   redeemBillingCode,
 } from '../src/services/accountService';
+import { formatPoint } from '../src/utils/pointFormat';
 
 type FilterState = {
   startDate: string;
@@ -265,35 +266,35 @@ const BillingCenterPage: React.FC = () => {
                   <Wallet size={16} />
                   当前点数
                 </div>
-                <div className="mt-3 text-3xl font-semibold text-white">{Number(data?.account.points || 0)}</div>
+                <div className="mt-3 text-3xl font-semibold text-white">{formatPoint(data?.account.points || 0)}</div>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
                   <TrendingDown size={16} />
                   所选时间内消费总点数
                 </div>
-                <div className="mt-3 text-3xl font-semibold text-white">{Number(data?.summary.spentPoints || 0)}</div>
+                <div className="mt-3 text-3xl font-semibold text-white">{formatPoint(data?.summary.spentPoints || 0)}</div>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
                   <CreditCard size={16} />
                   所选时间内充值总点数
                 </div>
-                <div className="mt-3 text-3xl font-semibold text-white">{Number(data?.summary.rechargedPoints || 0)}</div>
+                <div className="mt-3 text-3xl font-semibold text-white">{formatPoint(data?.summary.rechargedPoints || 0)}</div>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
                   <RotateCcw size={16} />
                   所选时间内退款总点数
                 </div>
-                <div className="mt-3 text-3xl font-semibold text-white">{Number(data?.summary.refundedPoints || 0)}</div>
+                <div className="mt-3 text-3xl font-semibold text-white">{formatPoint(data?.summary.refundedPoints || 0)}</div>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
                   <Gift size={16} />
                   所选时间内兑换到账总点数
                 </div>
-                <div className="mt-3 text-3xl font-semibold text-white">{Number(data?.summary.redeemedPoints || 0)}</div>
+                <div className="mt-3 text-3xl font-semibold text-white">{formatPoint(data?.summary.redeemedPoints || 0)}</div>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
@@ -489,9 +490,9 @@ const BillingCenterPage: React.FC = () => {
                               }`}
                             >
                               {positive ? '+' : '-'}
-                              {entry.points}
+                              {formatPoint(entry.points)}
                             </div>
-                            <div className="mt-1 text-xs text-gray-500">余额 {entry.balanceAfter}</div>
+                            <div className="mt-1 text-xs text-gray-500">余额 {formatPoint(entry.balanceAfter)}</div>
                           </div>
                         </div>
                         {renderLedgerMeta(entry) && (

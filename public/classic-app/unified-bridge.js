@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   const API_BASE_URL =
     typeof window !== "undefined" && window.location.hostname === "localhost"
       ? "http://localhost:3355/api"
@@ -76,10 +76,17 @@
     if (!cleaned) return "";
     return /^Bearer\s+/i.test(cleaned) ? cleaned : `Bearer ${cleaned}`;
   };
+  const toPointNumber = (value, fallback = 0) => {
+    const parsed = Number.parseFloat(String(value ?? fallback));
+    const numeric = Number.isFinite(parsed) ? parsed : Number.parseFloat(String(fallback || 0));
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.round(numeric * 10) / 10;
+  };
+  const formatPointValue = (value) => toPointNumber(value, 0).toFixed(1);
   const formatCoinLabel = (value) => {
-    const numeric = Number(value || 0);
+    const numeric = toPointNumber(value, 0);
     if (!Number.isFinite(numeric) || numeric <= 0) return "";
-    return `${numeric} 🪙`;
+    return `${formatPointValue(numeric)} 🪙`;
   };
   const getStoredSessionToken = () => {
     try {
@@ -154,7 +161,7 @@
     }
     return data;
   };
-  const formatClassicPoints = (value) => `${Number(value || 0)} 点`;
+  const formatClassicPoints = (value) => `${formatPointValue(value)} 点`;
   const formatClassicDateTime = (value) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -220,7 +227,7 @@
       .map((entry) => {
         const positive = isPositiveLedgerType(entry.type);
         const metaText = getClassicLedgerMetaText(entry);
-        const deltaText = `${positive ? "+" : "-"}${Number(entry.points || 0)}`;
+        const deltaText = `${positive ? "+" : "-"}${formatPointValue(entry.points || 0)}`;
         return `
           <div class="classic-ledger-item">
             <div class="classic-ledger-top">
@@ -244,7 +251,7 @@
     modelFamily: String(raw.modelFamily || raw.id || "default").trim(),
     routeFamily: String(raw.routeFamily || raw.modelFamily || "default").trim(),
     requestModel: String(raw.requestModel || "").trim(),
-    selectorCost: Number(raw.selectorCost || 0),
+    selectorCost: toPointNumber(raw.selectorCost || 0, 0),
     iconKind: String(raw.iconKind || "none").trim(),
     panelLayout: String(raw.panelLayout || "default").trim(),
     sizeBehavior: String(raw.sizeBehavior || "passthrough").trim(),
@@ -273,10 +280,11 @@
 
     Object.entries(overrides).forEach(([rawKey, rawValue]) => {
       const key = normalizeSizeKey(rawKey);
-      const pointCost = Number(rawValue?.pointCost ?? "");
-      if (!key || !Number.isFinite(pointCost) || pointCost < 0) {
+      const parsedPointCost = Number.parseFloat(String(rawValue?.pointCost ?? ""));
+      if (!key || !Number.isFinite(parsedPointCost) || parsedPointCost < 0) {
         return;
       }
+      const pointCost = toPointNumber(parsedPointCost, 0);
       next[key] = { pointCost };
     });
 
@@ -289,7 +297,7 @@
     line: String(raw.line || "default").trim(),
     transport: String(raw.transport || "openai-image").trim(),
     mode: String(raw.mode || "async").trim(),
-    pointCost: Number(raw.pointCost || 0),
+    pointCost: toPointNumber(raw.pointCost || 0, 0),
     sizeOverrides: normalizeSizeOverrides(raw.sizeOverrides),
     isActive: raw.isActive !== false,
     isDefaultRoute: raw.isDefaultRoute === true,
@@ -386,13 +394,14 @@
   };
   const getRoutePointCost = (route, size) => {
     const normalizedSize = normalizeSizeKey(size);
+    const overrideRaw = normalizedSize ? route?.sizeOverrides?.[normalizedSize]?.pointCost : "";
     const overridePointCost = normalizedSize
-      ? Number(route?.sizeOverrides?.[normalizedSize]?.pointCost ?? "")
+      ? Number.parseFloat(String(overrideRaw ?? ""))
       : Number.NaN;
     if (Number.isFinite(overridePointCost) && overridePointCost >= 0) {
-      return overridePointCost;
+      return toPointNumber(overridePointCost, 0);
     }
-    return Number(route?.pointCost || 0);
+    return toPointNumber(route?.pointCost || 0, 0);
   };
   const getDisplayRouteForModel = (modelId, preferredLine = "") => {
     const routes = getRoutesForModel(modelId).filter((route) =>
@@ -583,8 +592,8 @@
       if (balanceArea) balanceArea.style.display = "none";
       return;
     }
-    if (remainEl) remainEl.innerText = `${Number(account.points || 0)} 🪙`;
-    if (spentEl) spentEl.innerText = `${Number(account.totalSpent || 0)} 🪙`;
+    if (remainEl) remainEl.innerText = `${formatPointValue(account.points || 0)} 🪙`;
+    if (spentEl) spentEl.innerText = `${formatPointValue(account.totalSpent || 0)} 🪙`;
     if (balanceArea) balanceArea.style.display = "block";
   };
   const renderAuthMode = () => {
@@ -675,9 +684,9 @@
       if (metaEl) {
         metaEl.textContent = user.email || "-";
       }
-      if (remainEl) remainEl.textContent = `${Number(account?.points || 0)} 🪙`;
-      if (spentEl) spentEl.textContent = `${Number(account?.totalSpent || 0)} 🪙`;
-      if (rechargedEl) rechargedEl.textContent = `${Number(account?.totalRecharged || 0)} 🪙`;
+      if (remainEl) remainEl.textContent = `${formatPointValue(account?.points || 0)} 🪙`;
+      if (spentEl) spentEl.textContent = `${formatPointValue(account?.totalSpent || 0)} 🪙`;
+      if (rechargedEl) rechargedEl.textContent = `${formatPointValue(account?.totalRecharged || 0)} 🪙`;
       const roleText = user.isSuperAdmin ? "超级管理员" : user.isAdmin ? "管理员" : "普通用户";
       if (roleTextEl) roleTextEl.textContent = `角色：${roleText}`;
       if (userIdEl) userIdEl.textContent = `用户 ID：${user.userId || "-"}`;
@@ -815,9 +824,9 @@
     if (!account) return;
     if (typeof showBalanceModal === "function") {
       showBalanceModal({
-        remaining_points: Number(account.points || 0),
-        used_points: Number(account.totalSpent || 0),
-        total_points: Number(account.totalRecharged || account.points || 0),
+        remaining_points: toPointNumber(account.points || 0, 0),
+        used_points: toPointNumber(account.totalSpent || 0, 0),
+        total_points: toPointNumber(account.totalRecharged || account.points || 0, 0),
       });
     }
   };
@@ -1158,10 +1167,10 @@
       renderAuthState();
       if (input) input.value = "";
       setClassicRedeemStatus(
-        `兑换成功，已到账 ${Number(response.redeemedCode?.points || 0)} 点`,
+        `兑换成功，已到账 ${formatPointValue(response.redeemedCode?.points || 0)} 点`,
         "success",
       );
-      showSoftToast(`兑换成功，已到账 ${Number(response.redeemedCode?.points || 0)} 点`);
+      showSoftToast(`兑换成功，已到账 ${formatPointValue(response.redeemedCode?.points || 0)} 点`);
     } catch (error) {
       console.error("[Classic Bridge] redeem code failed:", error);
       setClassicRedeemStatus(error?.message || "兑换失败，请稍后重试", "error");
@@ -1970,3 +1979,4 @@
     void initClassicBridge();
   }
 })();
+

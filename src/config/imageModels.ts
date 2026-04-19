@@ -1,5 +1,6 @@
 import imageModelCatalog from '../../config/imageModels.json';
 import { getDoubaoSize } from '../utils/imageUtils';
+import { roundNonNegativePoint } from '../utils/pointFormat';
 
 export type ImageModelIconKind =
   | 'banana'
@@ -73,7 +74,7 @@ const normalizeModel = (model: Partial<ImageModelConfig> = {}): ImageModelConfig
   modelFamily: String(model.modelFamily || model.id || 'default').trim(),
   routeFamily: String(model.routeFamily || model.modelFamily || 'default').trim(),
   requestModel: String(model.requestModel || '').trim(),
-  selectorCost: Number(model.selectorCost || 0),
+  selectorCost: roundNonNegativePoint(model.selectorCost || 0, 0),
   iconKind: (model.iconKind || 'banana') as ImageModelIconKind,
   panelLayout: (model.panelLayout || 'default') as ImageModelPanelLayout,
   sizeBehavior: (model.sizeBehavior || 'passthrough') as ImageModelSizeBehavior,

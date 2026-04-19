@@ -11,6 +11,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { AdminDashboardPayload } from '../src/services/adminDashboardService';
+import { formatPoint } from '../src/utils/pointFormat';
 
 interface AdminOverviewPanelProps {
   data: AdminDashboardPayload | null;
@@ -164,8 +165,8 @@ const AdminOverviewPanel: React.FC<AdminOverviewPanelProps> = ({
         />
         <MetricCard
           title="点数余额"
-          value={data?.billing?.totalBalancePoints ?? 0}
-          hint={`累计充值 ${data?.billing?.totalRechargedPoints ?? 0} 点，累计净消费 ${data?.billing?.netSpentPoints ?? 0} 点。`}
+          value={formatPoint(data?.billing?.totalBalancePoints ?? 0)}
+          hint={`累计充值 ${formatPoint(data?.billing?.totalRechargedPoints ?? 0)} 点，累计净消费 ${formatPoint(data?.billing?.netSpentPoints ?? 0)} 点。`}
           icon={<Wallet size={20} />}
         />
       </div>
@@ -222,9 +223,9 @@ const AdminOverviewPanel: React.FC<AdminOverviewPanelProps> = ({
                       </td>
                       <td className="px-4 py-3 text-gray-300">{route.pendingTasks}</td>
                       <td className="px-4 py-3 text-gray-300">
-                        <div>{route.netSpentPoints} 点</div>
+                        <div>{formatPoint(route.netSpentPoints)} 点</div>
                         <div className="mt-1 text-xs text-gray-500">
-                          退款 {route.refundedPoints} 点
+                          退款 {formatPoint(route.refundedPoints)} 点
                         </div>
                       </td>
                       <td className="px-4 py-3 text-gray-400">{formatTime(route.lastChargeAt)}</td>
@@ -291,7 +292,7 @@ const AdminOverviewPanel: React.FC<AdminOverviewPanelProps> = ({
                           累计 {formatRate(model.successRate)}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-300">{model.netSpentPoints} 点</td>
+                      <td className="px-4 py-3 text-gray-300">{formatPoint(model.netSpentPoints)} 点</td>
                       <td className="px-4 py-3 text-gray-400">{formatTime(model.lastChargeAt)}</td>
                     </tr>
                   ))

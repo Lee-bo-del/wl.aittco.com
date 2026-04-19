@@ -2,6 +2,12 @@ const { randomBytes } = require("crypto");
 const imageRouteCatalog = require("./config/imageRoutes.json");
 const { buildBillingLedgerReport } = require("./billingReportUtils.cjs");
 const {
+  toNonNegativePoint,
+  toPointNumber,
+  toPositivePoint,
+  toSignedPoint,
+} = require("./pointMath.cjs");
+const {
   execute,
   fromDbDateTime,
   getPool,
@@ -22,18 +28,13 @@ class BillingError extends Error {
   }
 }
 
-const parsePositiveInt = (value, fallback = 0) => {
+const parsePositiveInteger = (value, fallback = 0) => {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   if (!Number.isFinite(parsed)) return fallback;
   return parsed > 0 ? parsed : 0;
 };
 
-const parseSignedInt = (value, fallback = 0) => {
-  const parsed = Number.parseInt(String(value ?? fallback), 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const DEFAULT_SIGNUP_POINTS = () => parsePositiveInt(process.env.DEFAULT_SIGNUP_POINTS, 0);
+const DEFAULT_SIGNUP_POINTS = () => toPositivePoint(process.env.DEFAULT_SIGNUP_POINTS, 0);
 
 const normalizeRedeemCode = (value = "") =>
   String(value || "")
@@ -61,9 +62,9 @@ const ensureBillingSchema = async () => {
           account_id VARCHAR(32) PRIMARY KEY,
           owner_user_id VARCHAR(32) NOT NULL UNIQUE,
           owner_email VARCHAR(255) NOT NULL,
-          points INT NOT NULL DEFAULT 0,
-          total_recharged INT NOT NULL DEFAULT 0,
-          total_spent INT NOT NULL DEFAULT 0,
+          points DECIMAL(12,1) NOT NULL DEFAULT 0,
+          total_recharged DECIMAL(12,1) NOT NULL DEFAULT 0,
+          total_spent DECIMAL(12,1) NOT NULL DEFAULT 0,
           created_at DATETIME(3) NOT NULL,
           updated_at DATETIME(3) NOT NULL,
           last_seen_at DATETIME(3) NOT NULL
@@ -74,8 +75,8 @@ const ensureBillingSchema = async () => {
           id VARCHAR(40) PRIMARY KEY,
           type VARCHAR(24) NOT NULL,
           account_id VARCHAR(32) NOT NULL,
-          points INT NOT NULL,
-          balance_after INT NOT NULL,
+          points DECIMAL(12,1) NOT NULL,
+          balance_after DECIMAL(12,1) NOT NULL,
           created_at DATETIME(3) NOT NULL,
           meta_json LONGTEXT NULL,
           refunded_at DATETIME(3) NULL,
@@ -88,7 +89,7 @@ const ensureBillingSchema = async () => {
           task_id VARCHAR(255) PRIMARY KEY,
           account_id VARCHAR(32) NOT NULL,
           charge_id VARCHAR(40) NULL,
-          points INT NOT NULL DEFAULT 0,
+          points DECIMAL(12,1) NOT NULL DEFAULT 0,
           route_id VARCHAR(80) NULL,
           action_name VARCHAR(40) NULL,
           created_at DATETIME(3) NOT NULL,
@@ -102,7 +103,7 @@ const ensureBillingSchema = async () => {
       await pool.execute(`
         CREATE TABLE IF NOT EXISTS billing_redeem_codes (
           code_value VARCHAR(40) PRIMARY KEY,
-          points INT NOT NULL,
+          points DECIMAL(12,1) NOT NULL,
           note VARCHAR(255) NULL,
           created_by_user_id VARCHAR(32) NULL,
           created_by_email VARCHAR(255) NULL,
@@ -115,6 +116,46 @@ const ensureBillingSchema = async () => {
           INDEX idx_billing_redeem_codes_redeemed_at (redeemed_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+
+      const ensureOneDecimalColumn = async (tableName, columnName, definition) => {
+        const [rows] = await pool.execute(
+          `SHOW COLUMNS FROM ${tableName} LIKE ?`,
+          [columnName],
+        );
+        const typeText = String(rows?.[0]?.Type || "").toLowerCase();
+        if (/^decimal\(\d+,\s*1\)$/.test(typeText)) return;
+        await pool.execute(
+          `ALTER TABLE ${tableName} MODIFY COLUMN ${columnName} ${definition}`,
+        );
+      };
+
+      await ensureOneDecimalColumn("billing_accounts", "points", "DECIMAL(12,1) NOT NULL DEFAULT 0");
+      await ensureOneDecimalColumn(
+        "billing_accounts",
+        "total_recharged",
+        "DECIMAL(12,1) NOT NULL DEFAULT 0",
+      );
+      await ensureOneDecimalColumn(
+        "billing_accounts",
+        "total_spent",
+        "DECIMAL(12,1) NOT NULL DEFAULT 0",
+      );
+      await ensureOneDecimalColumn("billing_ledger", "points", "DECIMAL(12,1) NOT NULL");
+      await ensureOneDecimalColumn(
+        "billing_ledger",
+        "balance_after",
+        "DECIMAL(12,1) NOT NULL",
+      );
+      await ensureOneDecimalColumn(
+        "billing_pending_tasks",
+        "points",
+        "DECIMAL(12,1) NOT NULL DEFAULT 0",
+      );
+      await ensureOneDecimalColumn(
+        "billing_redeem_codes",
+        "points",
+        "DECIMAL(12,1) NOT NULL",
+      );
     })();
   }
 
@@ -150,9 +191,9 @@ const publicAccount = (account) => ({
   accountId: account.account_id || account.accountId,
   ownerUserId: account.owner_user_id || account.ownerUserId || "",
   ownerEmail: account.owner_email || account.ownerEmail || "",
-  points: Number(account.points || 0),
-  totalRecharged: Number(account.total_recharged || account.totalRecharged || 0),
-  totalSpent: Number(account.total_spent || account.totalSpent || 0),
+  points: toPointNumber(account.points || 0),
+  totalRecharged: toPointNumber(account.total_recharged || account.totalRecharged || 0),
+  totalSpent: toPointNumber(account.total_spent || account.totalSpent || 0),
   createdAt: fromDbDateTime(account.created_at || account.createdAt),
   updatedAt: fromDbDateTime(account.updated_at || account.updatedAt),
   lastSeenAt: fromDbDateTime(account.last_seen_at || account.lastSeenAt),
@@ -172,8 +213,8 @@ const publicLedgerEntry = (entry) => ({
   id: entry.id,
   type: String(entry.type || "").trim(),
   accountId: entry.account_id || entry.accountId || "",
-  points: Number(entry.points || 0),
-  balanceAfter: Number(entry.balance_after || entry.balanceAfter || 0),
+  points: toPointNumber(entry.points || 0),
+  balanceAfter: toPointNumber(entry.balance_after || entry.balanceAfter || 0),
   createdAt: fromDbDateTime(entry.created_at || entry.createdAt),
   refundedAt: fromDbDateTime(entry.refunded_at || entry.refundedAt),
   refundReason: String(entry.refund_reason || entry.refundReason || "").trim() || null,
@@ -185,7 +226,7 @@ const publicRedeemCode = (entry) => ({
   normalizedCode: normalizeRedeemCode(
     entry.code_value || entry.codeValue || entry.code || "",
   ),
-  points: Number(entry.points || 0),
+  points: toPointNumber(entry.points || 0),
   note: String(entry.note || "").trim(),
   createdByUserId: String(entry.created_by_user_id || entry.createdByUserId || "").trim() || null,
   createdByEmail: String(entry.created_by_email || entry.createdByEmail || "").trim() || null,
@@ -208,7 +249,7 @@ const getBillingPricing = () =>
     modelFamily: route.modelFamily,
     mode: route.mode,
     transport: route.transport,
-    pointCost: Number(route.pointCost || 0),
+    pointCost: toPointNumber(route.pointCost || 0),
   }));
 
 const getOrCreateAccountInTx = async (connection, user) => {
@@ -494,16 +535,16 @@ const buildAdminBillingOverviewFromRows = ({
 
   const applyChargeToBucket = (bucket, { refunded, isRecent, createdAt, points }) => {
     bucket.totalCharges += 1;
-    bucket.grossChargePoints += points;
+    bucket.grossChargePoints = toPointNumber(bucket.grossChargePoints + points, 0);
     bucket.lastChargeAt = touchLatestTimestamp(bucket.lastChargeAt, createdAt);
 
     if (refunded) {
       bucket.failedCharges += 1;
-      bucket.refundedPoints += points;
+      bucket.refundedPoints = toPointNumber(bucket.refundedPoints + points, 0);
       if (isRecent) bucket.failedLast24h += 1;
     } else {
       bucket.successfulCharges += 1;
-      bucket.netSpentPoints += points;
+      bucket.netSpentPoints = toPointNumber(bucket.netSpentPoints + points, 0);
       if (isRecent) bucket.successfulLast24h += 1;
     }
 
@@ -514,9 +555,18 @@ const buildAdminBillingOverviewFromRows = ({
 
   for (const account of accounts || []) {
     overall.totalAccounts += 1;
-    overall.totalBalancePoints += Number(account.points || 0);
-    overall.totalRechargedPoints += Number(account.total_recharged || 0);
-    overall.totalSpentPoints += Number(account.total_spent || 0);
+    overall.totalBalancePoints = toPointNumber(
+      overall.totalBalancePoints + toPointNumber(account.points || 0),
+      0,
+    );
+    overall.totalRechargedPoints = toPointNumber(
+      overall.totalRechargedPoints + toPointNumber(account.total_recharged || 0),
+      0,
+    );
+    overall.totalSpentPoints = toPointNumber(
+      overall.totalSpentPoints + toPointNumber(account.total_spent || 0),
+      0,
+    );
   }
 
   for (const task of pendingTasks || []) {
@@ -540,7 +590,7 @@ const buildAdminBillingOverviewFromRows = ({
     const createdAtMs = createdAt ? Date.parse(createdAt) : NaN;
     const isRecent = Number.isFinite(createdAtMs) && createdAtMs >= recentCutoffMs;
     const refunded = Boolean(entry.refunded_at || entry.refundedAt);
-    const points = Number(entry.points || 0);
+    const points = toPointNumber(entry.points || 0);
 
     applyChargeToBucket(overall, { refunded, isRecent, createdAt, points });
 
@@ -570,6 +620,12 @@ const buildAdminBillingOverviewFromRows = ({
 
   const finalizeBucket = (bucket) => ({
     ...bucket,
+    grossChargePoints: toPointNumber(bucket.grossChargePoints, 0),
+    refundedPoints: toPointNumber(bucket.refundedPoints, 0),
+    netSpentPoints: toPointNumber(bucket.netSpentPoints, 0),
+    totalBalancePoints: toPointNumber(bucket.totalBalancePoints, 0),
+    totalRechargedPoints: toPointNumber(bucket.totalRechargedPoints, 0),
+    totalSpentPoints: toPointNumber(bucket.totalSpentPoints, 0),
     successRate:
       bucket.totalCharges > 0
         ? Number(((bucket.successfulCharges / bucket.totalCharges) * 100).toFixed(1))
@@ -655,7 +711,7 @@ const reservePoints = async (accountId, points, meta = {}) => {
       throw new BillingError("ACCOUNT_NOT_FOUND", "Billing account does not exist");
     }
 
-    const cost = parsePositiveInt(points, 0);
+    const cost = toPositivePoint(points, 0);
     if (cost <= 0) {
       return {
         chargeId: null,
@@ -664,15 +720,16 @@ const reservePoints = async (accountId, points, meta = {}) => {
       };
     }
 
-    if (Number(account.points || 0) < cost) {
+    const currentPoints = toPointNumber(account.points || 0);
+    if (currentPoints < cost) {
       throw new BillingError("INSUFFICIENT_POINTS", "Insufficient points", {
-        currentPoints: Number(account.points || 0),
+        currentPoints,
         requiredPoints: cost,
       });
     }
 
-    const nextPoints = Number(account.points || 0) - cost;
-    const nextTotalSpent = Number(account.total_spent || 0) + cost;
+    const nextPoints = toPointNumber(currentPoints - cost, 0);
+    const nextTotalSpent = toPointNumber(Number(account.total_spent || 0) + cost, 0);
     const nowDb = toDbDateTime();
     await connection.execute(
       `
@@ -729,9 +786,12 @@ const refundChargeInTx = async (connection, accountId, chargeId, meta = {}) => {
   const charge = chargeRows[0];
   if (!charge || charge.refunded_at) return null;
 
-  const refundPointsValue = Number(charge.points || 0);
-  const nextPoints = Number(account.points || 0) + refundPointsValue;
-  const nextTotalSpent = Math.max(Number(account.total_spent || 0) - refundPointsValue, 0);
+  const refundPointsValue = toPointNumber(charge.points || 0);
+    const nextPoints = toPointNumber(toPointNumber(account.points || 0) + refundPointsValue, 0);
+  const nextTotalSpent = toNonNegativePoint(
+    Number(account.total_spent || 0) - refundPointsValue,
+    0,
+  );
   const nowDb = toDbDateTime();
 
   await connection.execute(
@@ -818,7 +878,7 @@ const registerPendingTask = async (taskId, taskInfo) => {
       taskId,
       taskInfo.accountId || "",
       taskInfo.chargeId || null,
-      parsePositiveInt(taskInfo.points, 0),
+      toPositivePoint(taskInfo.points, 0),
       taskInfo.routeId || null,
       taskInfo.action || null,
       nowDb,
@@ -895,7 +955,7 @@ const rechargeAccount = async (accountId, points, note = "") => {
       throw new BillingError("ACCOUNT_NOT_FOUND", "Billing account does not exist");
     }
 
-    const amount = parsePositiveInt(points, 0);
+    const amount = toPositivePoint(points, 0);
     if (amount <= 0) {
       throw new BillingError(
         "INVALID_RECHARGE_POINTS",
@@ -903,8 +963,11 @@ const rechargeAccount = async (accountId, points, note = "") => {
       );
     }
 
-    const nextPoints = Number(account.points || 0) + amount;
-    const nextTotalRecharged = Number(account.total_recharged || 0) + amount;
+    const nextPoints = toPointNumber(toPointNumber(account.points || 0) + amount, 0);
+    const nextTotalRecharged = toPointNumber(
+      Number(account.total_recharged || 0) + amount,
+      0,
+    );
     const nowDb = toDbDateTime();
     await connection.execute(
       `
@@ -954,7 +1017,7 @@ const adjustAccountPoints = async (accountId, deltaPoints, meta = {}) => {
       throw new BillingError("ACCOUNT_NOT_FOUND", "Billing account does not exist");
     }
 
-    const delta = parseSignedInt(deltaPoints, 0);
+    const delta = toSignedPoint(deltaPoints, 0);
     if (!delta) {
       throw new BillingError(
         "INVALID_ADJUST_POINTS",
@@ -962,16 +1025,18 @@ const adjustAccountPoints = async (accountId, deltaPoints, meta = {}) => {
       );
     }
 
-    const nextPoints = Number(account.points || 0) + delta;
+    const nextPoints = toPointNumber(toPointNumber(account.points || 0) + delta, 0);
     if (nextPoints < 0) {
       throw new BillingError("INSUFFICIENT_POINTS", "Insufficient points", {
-        currentPoints: Number(account.points || 0),
-        requiredPoints: Math.abs(delta),
+        currentPoints: toPointNumber(account.points || 0),
+        requiredPoints: toPointNumber(Math.abs(delta), 0),
       });
     }
 
-    const nextTotalRecharged =
-      Number(account.total_recharged || 0) + (delta > 0 ? delta : 0);
+    const nextTotalRecharged = toPointNumber(
+      Number(account.total_recharged || 0) + (delta > 0 ? delta : 0),
+      0,
+    );
     const nowDb = toDbDateTime();
     await connection.execute(
       `
@@ -993,7 +1058,7 @@ const adjustAccountPoints = async (accountId, deltaPoints, meta = {}) => {
         `adj_${randomBytes(10).toString("hex")}`,
         ledgerType,
         accountId,
-        Math.abs(delta),
+        toPointNumber(Math.abs(delta), 0),
         nextPoints,
         nowDb,
         JSON.stringify({
@@ -1027,10 +1092,10 @@ const createRedeemCodes = async ({
   return withTransaction(async (connection) => {
     await cleanupBillingArtifacts(connection);
 
-    const amount = parsePositiveInt(points, 0);
+    const amount = toPositivePoint(points, 0);
     const totalCodes = Math.min(
       100,
-      Math.max(1, parsePositiveInt(quantity, 1)),
+      Math.max(1, parsePositiveInteger(quantity, 1)),
     );
 
     if (amount <= 0) {
@@ -1177,13 +1242,16 @@ const redeemCode = async (accountId, code, meta = {}) => {
       });
     }
 
-    const amount = parsePositiveInt(codeRow.points, 0);
+    const amount = toPositivePoint(codeRow.points, 0);
     if (amount <= 0) {
       throw new BillingError("INVALID_REDEEM_CODE", "Redeem code is invalid");
     }
 
-    const nextPoints = Number(account.points || 0) + amount;
-    const nextTotalRecharged = Number(account.total_recharged || 0) + amount;
+    const nextPoints = toPointNumber(toPointNumber(account.points || 0) + amount, 0);
+    const nextTotalRecharged = toPointNumber(
+      Number(account.total_recharged || 0) + amount,
+      0,
+    );
     const nowDb = toDbDateTime();
     await connection.execute(
       `

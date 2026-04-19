@@ -1,4 +1,5 @@
 const staticCatalog = require("./config/imageModels.json");
+const { toNonNegativePoint } = require("./pointMath.cjs");
 const {
   fromDbDateTime,
   getPool,
@@ -39,8 +40,7 @@ const parseInteger = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 const parseDecimal = (value, fallback = 0) => {
-  const parsed = Number.parseFloat(String(value ?? fallback));
-  return Number.isFinite(parsed) ? parsed : fallback;
+  return toNonNegativePoint(value, fallback);
 };
 const normalizeStringArray = (value = []) => {
   const input = Array.isArray(value)
@@ -168,7 +168,7 @@ const ensureImageModelSchema = async () => {
           model_family VARCHAR(64) NOT NULL,
           route_family VARCHAR(64) NOT NULL,
           request_model VARCHAR(160) NULL,
-          selector_cost DECIMAL(10,2) NOT NULL DEFAULT 0,
+          selector_cost DECIMAL(10,1) NOT NULL DEFAULT 0,
           icon_kind VARCHAR(32) NOT NULL DEFAULT 'banana',
           panel_layout VARCHAR(32) NOT NULL DEFAULT 'default',
           size_behavior VARCHAR(32) NOT NULL DEFAULT 'passthrough',
@@ -186,6 +186,16 @@ const ensureImageModelSchema = async () => {
           INDEX idx_image_models_request_model (request_model)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+      const [selectorCostColumns] = await pool.execute(
+        "SHOW COLUMNS FROM image_models LIKE 'selector_cost'",
+      );
+      const selectorCostType = String(selectorCostColumns?.[0]?.Type || "").toLowerCase();
+      if (!/^decimal\(\d+,\s*1\)$/.test(selectorCostType)) {
+        await pool.execute(`
+          ALTER TABLE image_models
+          MODIFY COLUMN selector_cost DECIMAL(10,1) NOT NULL DEFAULT 0
+        `);
+      }
 
       await withTransaction(async (connection) => {
         const [countRows] = await connection.execute(

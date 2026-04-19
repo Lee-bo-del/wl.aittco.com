@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import CoinIcon from './CoinIcon';
+import { formatPoint } from '../src/utils/pointFormat';
 
 export interface ModelOption {
   value: string;
@@ -52,7 +53,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, options, onChange,
           {!selectedOption?.disabled && selectedOption?.cost !== undefined && (
             <span className="flex items-center gap-1 text-yellow-400 font-mono bg-yellow-400/10 px-1.5 py-0.5 rounded">
               <CoinIcon size={10} />
-              {selectedOption.cost}
+              {formatPoint(selectedOption.cost)}
             </span>
           )}
           <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
@@ -93,7 +94,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, options, onChange,
                 {!option.disabled && option.cost !== undefined && (
                   <span className="flex items-center gap-1 text-yellow-500/80 font-mono text-[10px] w-14 justify-start">
                     <CoinIcon size={10} className="shrink-0" />
-                    {option.cost}
+                    {formatPoint(option.cost)}
                   </span>
                 )}
                 <div className="w-3 flex justify-center">

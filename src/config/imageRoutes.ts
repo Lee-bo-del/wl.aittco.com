@@ -1,5 +1,6 @@
 import imageRouteCatalog from '../../config/imageRoutes.json';
 import { getImageModelById, getImageModelRequestName } from './imageModels';
+import { roundNonNegativePoint } from '../utils/pointFormat';
 
 export type ImageRouteTransport = 'openai-image' | 'gemini-native';
 export type ImageRouteMode = 'async' | 'sync';
@@ -83,13 +84,13 @@ const normalizeSizeOverrides = (
     }
 
     const upstreamModel = String(rawValue.upstreamModel || '').trim();
-    const pointCost = Number(rawValue.pointCost ?? '');
+    const parsedPointCost = Number.parseFloat(String(rawValue.pointCost ?? ''));
     const entry: ImageRouteSizeOverrideConfig = {};
     if (upstreamModel) {
       entry.upstreamModel = upstreamModel;
     }
-    if (Number.isFinite(pointCost) && pointCost >= 0) {
-      entry.pointCost = pointCost;
+    if (Number.isFinite(parsedPointCost) && parsedPointCost >= 0) {
+      entry.pointCost = roundNonNegativePoint(parsedPointCost, 0);
     }
     if (entry.upstreamModel || Number.isFinite(entry.pointCost)) {
       next[key] = entry;
@@ -116,7 +117,7 @@ const normalizeRoute = (route: Partial<ImageRouteConfig> = {}): ImageRouteConfig
   useRequestModel: route.useRequestModel === true,
   allowUserApiKeyWithoutLogin: route.allowUserApiKeyWithoutLogin === true,
   apiKeyEnv: String(route.apiKeyEnv || '').trim(),
-  pointCost: Number(route.pointCost || 0),
+  pointCost: roundNonNegativePoint(route.pointCost || 0, 0),
   sizeOverrides: normalizeSizeOverrides(route.sizeOverrides),
   isActive: route.isActive !== false,
   isDefaultRoute: route.isDefaultRoute === true,
@@ -365,9 +366,9 @@ export const getImageRoutePointCost = (
 ): number => {
   const sizeOverride = getImageRouteSizeOverride(route, imageSize);
   if (sizeOverride && Number.isFinite(sizeOverride.pointCost)) {
-    return Number(sizeOverride.pointCost);
+    return roundNonNegativePoint(sizeOverride.pointCost, 0);
   }
-  return Number(route?.pointCost || 0);
+  return roundNonNegativePoint(route?.pointCost || 0, 0);
 };
 
 export const getImageModelNameForRoute = ({

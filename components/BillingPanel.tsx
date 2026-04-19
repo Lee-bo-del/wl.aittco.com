@@ -24,6 +24,7 @@ import {
 } from '../src/services/accountService';
 import { AuthSessionPayload } from '../src/services/accountIdentity';
 import { useToast } from '../src/context/ToastContext';
+import { formatPoint, roundPoint, roundPositivePoint } from '../src/utils/pointFormat';
 
 interface BillingPanelProps {
   session: AuthSessionPayload | null;
@@ -136,7 +137,7 @@ const BillingPanel: React.FC<BillingPanelProps> = ({ session }) => {
   };
 
   const handleAdjustPoints = async () => {
-    const delta = Number.parseInt(adjustDelta, 10);
+    const delta = roundPoint(adjustDelta, 0);
     if (!adjustAccountId.trim()) {
       setError('请输入目标账户 ID');
       return;
@@ -175,7 +176,7 @@ const BillingPanel: React.FC<BillingPanelProps> = ({ session }) => {
   };
 
   const handleCreateCodes = async () => {
-    const points = Number.parseInt(giftPoints, 10);
+    const points = roundPositivePoint(giftPoints, 0);
     const quantity = Number.parseInt(giftQuantity, 10);
     if (!Number.isFinite(points) || points <= 0) {
       setError('兑换码点数必须大于 0');
@@ -249,7 +250,7 @@ const BillingPanel: React.FC<BillingPanelProps> = ({ session }) => {
                 当前点数
               </div>
               <div className="mt-3 text-3xl font-semibold text-white">
-                {Number(data?.account.points || 0)}
+                {formatPoint(data?.account.points || 0)}
               </div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
@@ -258,7 +259,7 @@ const BillingPanel: React.FC<BillingPanelProps> = ({ session }) => {
                 累计消费
               </div>
               <div className="mt-3 text-3xl font-semibold text-white">
-                {Number(data?.account.totalSpent || 0)}
+                {formatPoint(data?.account.totalSpent || 0)}
               </div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
@@ -267,7 +268,7 @@ const BillingPanel: React.FC<BillingPanelProps> = ({ session }) => {
                 累计入账
               </div>
               <div className="mt-3 text-3xl font-semibold text-white">
-                {Number(data?.account.totalRecharged || 0)}
+                {formatPoint(data?.account.totalRecharged || 0)}
               </div>
             </div>
           </div>
@@ -469,7 +470,7 @@ const BillingPanel: React.FC<BillingPanelProps> = ({ session }) => {
                           </span>
                         </div>
                         <div className="mt-1 text-gray-500">
-                          {item.points} 点
+                          {formatPoint(item.points)} 点
                           {item.note ? ` / ${item.note}` : ''}
                         </div>
                       </div>

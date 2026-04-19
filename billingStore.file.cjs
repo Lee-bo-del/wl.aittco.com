@@ -3,6 +3,12 @@ const path = require("path");
 const { randomBytes } = require("crypto");
 const imageRouteCatalog = require("./config/imageRoutes.json");
 const { buildBillingLedgerReport } = require("./billingReportUtils.cjs");
+const {
+  toNonNegativePoint,
+  toPointNumber,
+  toPositivePoint,
+  toSignedPoint,
+} = require("./pointMath.cjs");
 
 const BILLING_FILE = path.join(__dirname, "billing-data.json");
 const BILLING_VERSION = 1;
@@ -18,19 +24,14 @@ class BillingError extends Error {
   }
 }
 
-const parsePositiveInt = (value, fallback = 0) => {
+const parsePositiveInteger = (value, fallback = 0) => {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   if (!Number.isFinite(parsed)) return fallback;
   return parsed > 0 ? parsed : 0;
 };
 
-const parseSignedInt = (value, fallback = 0) => {
-  const parsed = Number.parseInt(String(value ?? fallback), 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
 const DEFAULT_SIGNUP_POINTS = () =>
-  parsePositiveInt(process.env.DEFAULT_SIGNUP_POINTS, 0);
+  toPositivePoint(process.env.DEFAULT_SIGNUP_POINTS, 0);
 
 const normalizeRedeemCode = (value = "") =>
   String(value || "")
@@ -120,12 +121,13 @@ const cleanupStore = (store) => {
 
 const createAccountForUser = (user = {}) => {
   const now = new Date().toISOString();
+  const signupPoints = DEFAULT_SIGNUP_POINTS();
   return {
     accountId: `acct_${randomBytes(8).toString("hex")}`,
     ownerUserId: String(user.userId || "").trim(),
     ownerEmail: String(user.email || "").trim().toLowerCase(),
-    points: DEFAULT_SIGNUP_POINTS(),
-    totalRecharged: DEFAULT_SIGNUP_POINTS(),
+    points: signupPoints,
+    totalRecharged: signupPoints,
     totalSpent: 0,
     createdAt: now,
     updatedAt: now,
@@ -137,9 +139,9 @@ const publicAccount = (account) => ({
   accountId: account.accountId,
   ownerUserId: account.ownerUserId || "",
   ownerEmail: account.ownerEmail || "",
-  points: Number(account.points || 0),
-  totalRecharged: Number(account.totalRecharged || 0),
-  totalSpent: Number(account.totalSpent || 0),
+  points: toPointNumber(account.points || 0),
+  totalRecharged: toPointNumber(account.totalRecharged || 0),
+  totalSpent: toPointNumber(account.totalSpent || 0),
   createdAt: account.createdAt,
   updatedAt: account.updatedAt,
   lastSeenAt: account.lastSeenAt,
@@ -149,8 +151,8 @@ const publicLedgerEntry = (entry) => ({
   id: entry.id,
   type: String(entry.type || "").trim(),
   accountId: entry.accountId || "",
-  points: Number(entry.points || 0),
-  balanceAfter: Number(entry.balanceAfter || 0),
+  points: toPointNumber(entry.points || 0),
+  balanceAfter: toPointNumber(entry.balanceAfter || 0),
   createdAt: entry.createdAt || null,
   refundedAt: entry.refundedAt || null,
   refundReason: entry.refundReason || null,
@@ -160,7 +162,7 @@ const publicLedgerEntry = (entry) => ({
 const publicRedeemCode = (entry) => ({
   code: formatRedeemCode(entry.codeValue || entry.code || ""),
   normalizedCode: normalizeRedeemCode(entry.codeValue || entry.code || ""),
-  points: Number(entry.points || 0),
+  points: toPointNumber(entry.points || 0),
   note: String(entry.note || "").trim(),
   createdByUserId: String(entry.createdByUserId || "").trim() || null,
   createdByEmail: String(entry.createdByEmail || "").trim() || null,
@@ -180,7 +182,7 @@ const getBillingPricing = () =>
     modelFamily: route.modelFamily,
     mode: route.mode,
     transport: route.transport,
-    pointCost: Number(route.pointCost || 0),
+    pointCost: toPointNumber(route.pointCost || 0),
   }));
 
 const touchAccount = (account) => {
@@ -404,16 +406,16 @@ const buildAdminBillingOverviewFromStore = (store, { recentWindowHours = 24 } = 
 
   const applyChargeToBucket = (bucket, { refunded, isRecent, createdAt, points }) => {
     bucket.totalCharges += 1;
-    bucket.grossChargePoints += points;
+    bucket.grossChargePoints = toPointNumber(bucket.grossChargePoints + points, 0);
     bucket.lastChargeAt = touchLatestTimestamp(bucket.lastChargeAt, createdAt);
 
     if (refunded) {
       bucket.failedCharges += 1;
-      bucket.refundedPoints += points;
+      bucket.refundedPoints = toPointNumber(bucket.refundedPoints + points, 0);
       if (isRecent) bucket.failedLast24h += 1;
     } else {
       bucket.successfulCharges += 1;
-      bucket.netSpentPoints += points;
+      bucket.netSpentPoints = toPointNumber(bucket.netSpentPoints + points, 0);
       if (isRecent) bucket.successfulLast24h += 1;
     }
 
@@ -424,9 +426,18 @@ const buildAdminBillingOverviewFromStore = (store, { recentWindowHours = 24 } = 
 
   for (const account of accounts) {
     overall.totalAccounts += 1;
-    overall.totalBalancePoints += Number(account?.points || 0);
-    overall.totalRechargedPoints += Number(account?.totalRecharged || 0);
-    overall.totalSpentPoints += Number(account?.totalSpent || 0);
+    overall.totalBalancePoints = toPointNumber(
+      overall.totalBalancePoints + toPointNumber(account?.points || 0),
+      0,
+    );
+    overall.totalRechargedPoints = toPointNumber(
+      overall.totalRechargedPoints + toPointNumber(account?.totalRecharged || 0),
+      0,
+    );
+    overall.totalSpentPoints = toPointNumber(
+      overall.totalSpentPoints + toPointNumber(account?.totalSpent || 0),
+      0,
+    );
   }
 
   for (const task of pendingTasks) {
@@ -447,7 +458,7 @@ const buildAdminBillingOverviewFromStore = (store, { recentWindowHours = 24 } = 
     const createdAtMs = createdAt ? Date.parse(createdAt) : NaN;
     const isRecent = Number.isFinite(createdAtMs) && createdAtMs >= recentCutoffMs;
     const refunded = Boolean(entry?.refundedAt);
-    const points = Number(entry?.points || 0);
+    const points = toPointNumber(entry?.points || 0);
 
     applyChargeToBucket(overall, { refunded, isRecent, createdAt, points });
 
@@ -477,6 +488,12 @@ const buildAdminBillingOverviewFromStore = (store, { recentWindowHours = 24 } = 
 
   const finalizeBucket = (bucket) => ({
     ...bucket,
+    grossChargePoints: toPointNumber(bucket.grossChargePoints, 0),
+    refundedPoints: toPointNumber(bucket.refundedPoints, 0),
+    netSpentPoints: toPointNumber(bucket.netSpentPoints, 0),
+    totalBalancePoints: toPointNumber(bucket.totalBalancePoints, 0),
+    totalRechargedPoints: toPointNumber(bucket.totalRechargedPoints, 0),
+    totalSpentPoints: toPointNumber(bucket.totalSpentPoints, 0),
     successRate:
       bucket.totalCharges > 0
         ? Number(((bucket.successfulCharges / bucket.totalCharges) * 100).toFixed(1))
@@ -525,7 +542,7 @@ const reservePoints = (accountId, points, meta = {}) =>
       throw new BillingError("ACCOUNT_NOT_FOUND", "Billing account does not exist");
     }
 
-    const cost = parsePositiveInt(points, 0);
+    const cost = toPositivePoint(points, 0);
     if (cost <= 0) {
       return {
         chargeId: null,
@@ -534,15 +551,16 @@ const reservePoints = (accountId, points, meta = {}) =>
       };
     }
 
-    if (Number(account.points || 0) < cost) {
+    const currentPoints = toPointNumber(account.points || 0);
+    if (currentPoints < cost) {
       throw new BillingError("INSUFFICIENT_POINTS", "Insufficient points", {
-        currentPoints: Number(account.points || 0),
+        currentPoints,
         requiredPoints: cost,
       });
     }
 
-    account.points -= cost;
-    account.totalSpent = Number(account.totalSpent || 0) + cost;
+    account.points = toPointNumber(Number(account.points || 0) - cost, 0);
+    account.totalSpent = toPointNumber(Number(account.totalSpent || 0) + cost, 0);
     touchAccount(account);
 
     const chargeId = `chg_${randomBytes(10).toString("hex")}`;
@@ -575,9 +593,12 @@ const refundChargeInStore = (store, accountId, chargeId, meta = {}) => {
     return null;
   }
 
-  const refundPoints = Number(charge.points || 0);
-  account.points += refundPoints;
-  account.totalSpent = Math.max(Number(account.totalSpent || 0) - refundPoints, 0);
+  const refundPoints = toPointNumber(charge.points || 0);
+  account.points = toPointNumber(Number(account.points || 0) + refundPoints, 0);
+  account.totalSpent = toNonNegativePoint(
+    Number(account.totalSpent || 0) - refundPoints,
+    0,
+  );
   touchAccount(account);
 
   charge.refundedAt = account.updatedAt;
@@ -647,13 +668,13 @@ const rechargeAccount = (accountId, points, note = "") =>
       throw new BillingError("ACCOUNT_NOT_FOUND", "Billing account does not exist");
     }
 
-    const amount = parsePositiveInt(points, 0);
+    const amount = toPositivePoint(points, 0);
     if (amount <= 0) {
       throw new BillingError("INVALID_RECHARGE_POINTS", "Recharge points must be greater than zero");
     }
 
-    account.points += amount;
-    account.totalRecharged = Number(account.totalRecharged || 0) + amount;
+    account.points = toPointNumber(Number(account.points || 0) + amount, 0);
+    account.totalRecharged = toPointNumber(Number(account.totalRecharged || 0) + amount, 0);
     touchAccount(account);
 
     store.ledger.unshift({
@@ -676,22 +697,26 @@ const adjustAccountPoints = (accountId, deltaPoints, meta = {}) =>
       throw new BillingError("ACCOUNT_NOT_FOUND", "Billing account does not exist");
     }
 
-    const delta = parseSignedInt(deltaPoints, 0);
+    const delta = toSignedPoint(deltaPoints, 0);
     if (!delta) {
       throw new BillingError("INVALID_ADJUST_POINTS", "Adjustment points cannot be zero");
     }
 
-    const nextPoints = Number(account.points || 0) + delta;
+    const currentPoints = toPointNumber(account.points || 0);
+    const nextPoints = toPointNumber(currentPoints + delta, 0);
     if (nextPoints < 0) {
       throw new BillingError("INSUFFICIENT_POINTS", "Insufficient points", {
-        currentPoints: Number(account.points || 0),
-        requiredPoints: Math.abs(delta),
+        currentPoints,
+        requiredPoints: toPointNumber(Math.abs(delta), 0),
       });
     }
 
     account.points = nextPoints;
     if (delta > 0) {
-      account.totalRecharged = Number(account.totalRecharged || 0) + delta;
+      account.totalRecharged = toPointNumber(
+        Number(account.totalRecharged || 0) + delta,
+        0,
+      );
     }
     touchAccount(account);
 
@@ -699,7 +724,7 @@ const adjustAccountPoints = (accountId, deltaPoints, meta = {}) =>
       id: `adj_${randomBytes(10).toString("hex")}`,
       type: delta > 0 ? "admin_credit" : "admin_debit",
       accountId,
-      points: Math.abs(delta),
+      points: toPointNumber(Math.abs(delta), 0),
       balanceAfter: account.points,
       createdAt: account.updatedAt,
       meta: {
@@ -722,8 +747,8 @@ const createRedeemCodes = ({
   createdByEmail = null,
 } = {}) =>
   withStore((store) => {
-    const amount = parsePositiveInt(points, 0);
-    const totalCodes = Math.min(100, Math.max(1, parsePositiveInt(quantity, 1)));
+    const amount = toPositivePoint(points, 0);
+    const totalCodes = Math.min(100, Math.max(1, parsePositiveInteger(quantity, 1)));
 
     if (amount <= 0) {
       throw new BillingError(
@@ -822,13 +847,13 @@ const redeemCode = (accountId, code, meta = {}) =>
       });
     }
 
-    const amount = parsePositiveInt(redeemEntry.points, 0);
+    const amount = toPositivePoint(redeemEntry.points, 0);
     if (amount <= 0) {
       throw new BillingError("INVALID_REDEEM_CODE", "Redeem code is invalid");
     }
 
-    account.points = Number(account.points || 0) + amount;
-    account.totalRecharged = Number(account.totalRecharged || 0) + amount;
+    account.points = toPointNumber(Number(account.points || 0) + amount, 0);
+    account.totalRecharged = toPointNumber(Number(account.totalRecharged || 0) + amount, 0);
     touchAccount(account);
 
     redeemEntry.redeemedByUserId = String(meta.userId || "").trim() || null;

@@ -24,6 +24,7 @@ import {
   fetchAdminImageModels,
 } from '../src/services/imageModelAdminService';
 import { useToast } from '../src/context/ToastContext';
+import { formatPoint, roundNonNegativePoint } from '../src/utils/pointFormat';
 
 interface RouteAdminPanelProps {
   session: AuthSessionPayload | null;
@@ -185,7 +186,7 @@ const RouteAdminPanel: React.FC<RouteAdminPanelProps> = ({ session }) => {
         upstreamModel: form.upstreamModel?.trim() || '',
         apiKeyEnv: form.apiKeyEnv?.trim() || '',
         apiKey: form.apiKey?.trim() || '',
-        pointCost: Number(form.pointCost || 0),
+        pointCost: roundNonNegativePoint(form.pointCost || 0, 0),
         sortOrder: Number(form.sortOrder || 0),
       };
 
@@ -325,7 +326,7 @@ const RouteAdminPanel: React.FC<RouteAdminPanelProps> = ({ session }) => {
                         </div>
                       </div>
                       <div className="shrink-0 text-right text-[11px] text-gray-300">
-                        <div>{route.pointCost || 0} 点/次</div>
+                        <div>{formatPoint(route.pointCost || 0)} 点/次</div>
                         <div className="mt-1 flex flex-wrap items-center justify-end gap-1">
                           {route.isActive ? (
                             <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300">
@@ -524,9 +525,15 @@ const RouteAdminPanel: React.FC<RouteAdminPanelProps> = ({ session }) => {
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <input
+                type="number"
+                step="0.1"
+                min="0"
                 value={String(form.pointCost || 0)}
                 onChange={(event) =>
-                  setForm((prev) => ({ ...prev, pointCost: Number(event.target.value || 0) }))
+                  setForm((prev) => ({
+                    ...prev,
+                    pointCost: roundNonNegativePoint(event.target.value || 0, 0),
+                  }))
                 }
                 placeholder="点数价格"
                 className="h-10 rounded-lg border border-white/10 bg-black/25 px-3 text-sm text-white placeholder:text-gray-500 focus:border-white/20 focus:outline-none"

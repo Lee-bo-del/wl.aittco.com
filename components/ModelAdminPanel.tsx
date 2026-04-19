@@ -20,6 +20,7 @@ import {
   type AdminImageModelPayload,
 } from '../src/services/imageModelAdminService';
 import { useToast } from '../src/context/ToastContext';
+import { formatPoint, roundNonNegativePoint } from '../src/utils/pointFormat';
 
 interface ModelAdminPanelProps {
   session: AuthSessionPayload | null;
@@ -157,7 +158,7 @@ const ModelAdminPanel: React.FC<ModelAdminPanelProps> = ({ session }) => {
         routeFamily: form.routeFamily.trim(),
         requestModel: form.requestModel?.trim() || '',
         defaultSize: form.defaultSize?.trim().toLowerCase() || '1k',
-        selectorCost: Number(form.selectorCost || 0),
+        selectorCost: roundNonNegativePoint(form.selectorCost || 0, 0),
         sortOrder: Number(form.sortOrder || 0),
         sizeOptions: inputToArray(form.sizeOptionsInput).map((item) => item.toLowerCase()),
         extraAspectRatios: inputToArray(form.extraAspectRatiosInput),
@@ -291,7 +292,7 @@ const ModelAdminPanel: React.FC<ModelAdminPanelProps> = ({ session }) => {
                         </div>
                       </div>
                       <div className="shrink-0 text-right text-[11px] text-gray-300">
-                        <div>{model.selectorCost || 0} 点展示价</div>
+                        <div>{formatPoint(model.selectorCost || 0)} 点展示价</div>
                         <div className="mt-1 flex flex-wrap items-center justify-end gap-1">
                           {model.isActive ? (
                             <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300">
@@ -404,9 +405,15 @@ const ModelAdminPanel: React.FC<ModelAdminPanelProps> = ({ session }) => {
                 className="h-10 rounded-lg border border-white/10 bg-black/25 px-3 text-sm text-white placeholder:text-gray-500 focus:border-white/20 focus:outline-none"
               />
               <input
+                type="number"
+                step="0.1"
+                min="0"
                 value={String(form.selectorCost || 0)}
                 onChange={(event) =>
-                  setForm((prev) => ({ ...prev, selectorCost: Number(event.target.value || 0) }))
+                  setForm((prev) => ({
+                    ...prev,
+                    selectorCost: roundNonNegativePoint(event.target.value || 0, 0),
+                  }))
                 }
                 placeholder="前台展示价"
                 className="h-10 rounded-lg border border-white/10 bg-black/25 px-3 text-sm text-white placeholder:text-gray-500 focus:border-white/20 focus:outline-none"

@@ -1,5 +1,6 @@
 import videoRouteCatalog from '../../config/videoRoutes.json';
 import { getVideoModelById } from './videoModels';
+import { roundNonNegativePoint } from '../utils/pointFormat';
 
 export type VideoRouteTransport = 'openai-video';
 export type VideoRouteMode = 'async';
@@ -55,7 +56,7 @@ const normalizeRoute = (route: Partial<VideoRouteConfig> = {}): VideoRouteConfig
   useRequestModel: route.useRequestModel === true,
   allowUserApiKeyWithoutLogin: route.allowUserApiKeyWithoutLogin === true,
   apiKeyEnv: String(route.apiKeyEnv || '').trim(),
-  pointCost: Number(route.pointCost || 0),
+  pointCost: roundNonNegativePoint(route.pointCost || 0, 0),
   isActive: route.isActive !== false,
   isDefaultRoute: route.isDefaultRoute === true,
   sortOrder: Number(route.sortOrder || 0),

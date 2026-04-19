@@ -18,6 +18,7 @@ import {
 } from '../src/services/userAdminService';
 import { adjustBillingAccount } from '../src/services/accountService';
 import { useToast } from '../src/context/ToastContext';
+import { formatPoint, roundPoint } from '../src/utils/pointFormat';
 
 interface UserAdminPanelProps {
   session: AuthSessionPayload | null;
@@ -195,7 +196,7 @@ const UserAdminPanel: React.FC<UserAdminPanelProps> = ({ session }) => {
   const handleAdjustPoints = async () => {
     if (!detail?.account) return;
 
-    const delta = Number.parseInt(adjustDelta, 10);
+    const delta = roundPoint(adjustDelta, 0);
     if (!Number.isFinite(delta) || delta === 0) {
       setError('调整点数不能为 0');
       return;
@@ -331,8 +332,8 @@ const UserAdminPanel: React.FC<UserAdminPanelProps> = ({ session }) => {
                       <div className="mt-1 truncate text-[11px] text-gray-400">{user.email}</div>
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
                         <span>{user.status === 'active' ? '已启用' : '已停用'}</span>
-                        <span>余额 {user.account?.points ?? 0}</span>
-                        <span>消费 {user.account?.totalSpent ?? 0}</span>
+                        <span>余额 {formatPoint(user.account?.points ?? 0)}</span>
+                        <span>消费 {formatPoint(user.account?.totalSpent ?? 0)}</span>
                       </div>
                     </div>
                   </div>
@@ -396,10 +397,10 @@ const UserAdminPanel: React.FC<UserAdminPanelProps> = ({ session }) => {
                   <div className="text-[11px] uppercase tracking-wider text-gray-500">账户余额</div>
                   <div className="mt-2 flex items-center gap-2 text-xl font-bold text-white">
                     <Coins size={16} className="text-yellow-400" />
-                    {detail.account?.points ?? 0}
+                    {formatPoint(detail.account?.points ?? 0)}
                   </div>
                   <div className="mt-1 text-[11px] text-gray-400">
-                    累计消费 {detail.account?.totalSpent ?? 0}
+                    累计消费 {formatPoint(detail.account?.totalSpent ?? 0)}
                   </div>
                 </div>
 
@@ -546,12 +547,12 @@ const UserAdminPanel: React.FC<UserAdminPanelProps> = ({ session }) => {
                               }
                             >
                               {positiveTypes.has(entry.type) ? '+' : '-'}
-                              {entry.points}
+                              {formatPoint(entry.points)}
                             </div>
                           </div>
                           <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-gray-500">
                             <span>{entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '-'}</span>
-                            <span>余额 {entry.balanceAfter}</span>
+                            <span>余额 {formatPoint(entry.balanceAfter)}</span>
                           </div>
                           {entry.meta && (
                             <div className="mt-2 text-[11px] text-gray-400">

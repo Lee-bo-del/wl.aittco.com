@@ -1,4 +1,5 @@
 const staticCatalog = require("./config/imageRoutes.json");
+const { toNonNegativePoint } = require("./pointMath.cjs");
 const {
   fromDbDateTime,
   getPool,
@@ -36,6 +37,7 @@ const parseInteger = (value, fallback = 0) => {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+const parsePoint = (value, fallback = 0) => toNonNegativePoint(value, fallback);
 const trimTrailingSlash = (value = "") => trimToString(value).replace(/\/+$/, "");
 const normalizeSizeKey = (value = "") => {
   const normalized = trimToString(value).toLowerCase();
@@ -69,7 +71,7 @@ const normalizeSizeOverrides = (value) => {
     const pointCost =
       pointCostRaw === null || pointCostRaw === undefined || pointCostRaw === ""
         ? null
-        : Math.max(0, parseInteger(pointCostRaw, 0));
+        : parsePoint(pointCostRaw, 0);
 
     const entry = {};
     if (upstreamModel) {
@@ -110,7 +112,7 @@ const normalizeStaticRoute = (route, index) => ({
   allow_user_api_key_without_login: parseBoolean(route.allowUserApiKeyWithoutLogin, false),
   api_key: null,
   api_key_env: trimToNull(route.apiKeyEnv),
-  point_cost: parseInteger(route.pointCost, 0),
+  point_cost: parsePoint(route.pointCost, 0),
   size_overrides: stringifySizeOverrides(route.sizeOverrides),
   sort_order: index,
   is_active: true,
@@ -145,7 +147,7 @@ const mapRowToRoute = (row, { includeSecrets = false } = {}) => ({
   useRequestModel: parseBoolean(row.use_request_model, false),
   allowUserApiKeyWithoutLogin: parseBoolean(row.allow_user_api_key_without_login, false),
   apiKeyEnv: trimToString(row.api_key_env || ""),
-  pointCost: parseInteger(row.point_cost, 0),
+  pointCost: parsePoint(row.point_cost, 0),
   sizeOverrides: normalizeSizeOverrides(row.size_overrides),
   sortOrder: parseInteger(row.sort_order, 0),
   isActive: parseBoolean(row.is_active, true),
@@ -228,7 +230,7 @@ const ensureImageRouteSchema = async () => {
           allow_user_api_key_without_login TINYINT(1) NOT NULL DEFAULT 0,
           api_key LONGTEXT NULL,
           api_key_env VARCHAR(128) NULL,
-          point_cost INT NOT NULL DEFAULT 0,
+          point_cost DECIMAL(10,1) NOT NULL DEFAULT 0,
           size_overrides LONGTEXT NULL,
           sort_order INT NOT NULL DEFAULT 0,
           is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -259,6 +261,16 @@ const ensureImageRouteSchema = async () => {
           ALTER TABLE image_routes
           ADD COLUMN size_overrides LONGTEXT NULL
             AFTER point_cost
+        `);
+      }
+      const [pointCostColumns] = await pool.execute(
+        "SHOW COLUMNS FROM image_routes LIKE 'point_cost'",
+      );
+      const pointCostType = String(pointCostColumns?.[0]?.Type || "").toLowerCase();
+      if (!/^decimal\(\d+,\s*1\)$/.test(pointCostType)) {
+        await pool.execute(`
+          ALTER TABLE image_routes
+          MODIFY COLUMN point_cost DECIMAL(10,1) NOT NULL DEFAULT 0
         `);
       }
       await pool.execute(
@@ -519,7 +531,7 @@ const validateRoutePayload = (input = {}, { partial = false } = {}) => {
   }
 
   if (!partial || Object.prototype.hasOwnProperty.call(input, "pointCost")) {
-    next.point_cost = Math.max(0, parseInteger(input.pointCost, 0));
+    next.point_cost = parsePoint(input.pointCost, 0);
   }
 
   if (!partial || Object.prototype.hasOwnProperty.call(input, "sizeOverrides")) {

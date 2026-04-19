@@ -103,6 +103,7 @@ const {
   listAdminChanges,
   recordAdminChange,
 } = require("./adminChangeLogStore.cjs");
+const { toPointNumber } = require("./pointMath.cjs");
 
 // Logger Configuration
 const logger = winston.createLogger({
@@ -201,7 +202,7 @@ const toPublicImageRouteSizeOverrides = (overrides) => {
 
   return Object.entries(overrides).reduce((accumulator, [rawKey, rawValue]) => {
     const key = String(rawKey || "").trim().toLowerCase();
-    const pointCost = Number(rawValue?.pointCost ?? "");
+    const pointCost = toPointNumber(rawValue?.pointCost ?? "", 0);
     if (!["1k", "2k", "4k"].includes(key) || !Number.isFinite(pointCost) || pointCost < 0) {
       return accumulator;
     }
@@ -217,7 +218,7 @@ const toPublicImageRoute = (route = {}) => ({
   transport: String(route.transport || "openai-image").trim(),
   mode: String(route.mode || "async").trim(),
   allowUserApiKeyWithoutLogin: route.allowUserApiKeyWithoutLogin === true,
-  pointCost: Number(route.pointCost || 0),
+  pointCost: toPointNumber(route.pointCost || 0),
   sizeOverrides: toPublicImageRouteSizeOverrides(route.sizeOverrides),
   sortOrder: Number(route.sortOrder || 0),
   isActive: route.isActive !== false,
@@ -232,7 +233,7 @@ const toPublicVideoRoute = (route = {}) => ({
   transport: String(route.transport || "openai-video").trim(),
   mode: String(route.mode || "async").trim(),
   allowUserApiKeyWithoutLogin: route.allowUserApiKeyWithoutLogin === true,
-  pointCost: Number(route.pointCost || 0),
+  pointCost: toPointNumber(route.pointCost || 0),
   sortOrder: Number(route.sortOrder || 0),
   isActive: route.isActive !== false,
   isDefaultRoute: route.isDefaultRoute === true,
@@ -342,8 +343,8 @@ const isOpenAiImageRoute = (route) =>
   route?.transport === "openai-image" && !isGeminiNativeStylePath(route);
 const getRoutePointCost = (route, quantity = 1, requestBody = {}) => {
   const sizeOverride = getRouteSizeOverride(route, requestBody);
-  const pointCost = Number(sizeOverride?.pointCost ?? route?.pointCost ?? 0);
-  return Math.max(0, pointCost) * Math.max(1, Number(quantity || 1));
+  const pointCost = toPointNumber(sizeOverride?.pointCost ?? route?.pointCost ?? 0);
+  return toPointNumber(Math.max(0, pointCost) * Math.max(1, Number(quantity || 1)), 0);
 };
 const resolveRequestedImageModel = async (requestBody = {}) => {
   const modelId = String(requestBody?.modelId || "").trim();
@@ -368,6 +369,11 @@ const EMERGENCY_ADMIN_API_KEYS = [
 const parsePositivePage = (value, fallback = 1) => {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+const parsePointValue = (value, fallback = 0) => toPointNumber(value, fallback);
+const parsePositivePointValue = (value, fallback = 0) => {
+  const point = toPointNumber(value, fallback);
+  return point > 0 ? point : 0;
 };
 
 const parseBillingFilterText = (value) => String(value || "").trim();
@@ -451,7 +457,7 @@ const mergeAdminRouteRuntimeStats = (catalog, stats = []) => {
       mode: route.mode,
       transport: route.transport,
       baseUrl: route.baseUrl,
-      pointCost: Number(route.pointCost || 0),
+      pointCost: toPointNumber(route.pointCost || 0),
       isActive: route.isActive !== false,
       isDefaultRoute: route.isDefaultRoute === true,
       isDefaultNanoBananaLine: route.isDefaultNanoBananaLine === true,
@@ -542,7 +548,7 @@ const mergeAdminModelRuntimeStats = (catalog, stats = []) => {
       modelFamily: model?.modelFamily || "unknown",
       routeFamily: model?.routeFamily || "unknown",
       requestModel: model?.requestModel || runtimeRequestModel || "",
-      selectorCost: Number(model?.selectorCost || 0),
+      selectorCost: toPointNumber(model?.selectorCost || 0),
       panelLayout: model?.panelLayout || "default",
       sizeBehavior: model?.sizeBehavior || "passthrough",
       isActive: model?.isActive !== false,
@@ -575,7 +581,7 @@ const mergeAdminModelRuntimeStats = (catalog, stats = []) => {
       modelFamily: model.modelFamily,
       routeFamily: model.routeFamily,
       requestModel: model.requestModel || "",
-      selectorCost: Number(model.selectorCost || 0),
+      selectorCost: toPointNumber(model.selectorCost || 0),
       panelLayout: model.panelLayout || "default",
       sizeBehavior: model.sizeBehavior || "passthrough",
       isActive: model.isActive !== false,
@@ -1742,7 +1748,7 @@ app.post("/api/account/recharge", async (req, res) => {
     await requireSuperAdminAccess(req);
 
     const accountId = String(req.body?.accountId || "").trim();
-    const points = Number.parseInt(String(req.body?.points || 0), 10);
+    const points = parsePositivePointValue(req.body?.points, 0);
     const note = String(req.body?.note || "").trim();
 
     if (!accountId) {
@@ -1769,14 +1775,14 @@ app.post("/api/account/adjust", async (req, res) => {
   try {
     const actor = await requireSuperAdminAccess(req);
     const accountId = String(req.body?.accountId || "").trim();
-    const delta = Number.parseInt(String(req.body?.delta || 0), 10);
+    const delta = parsePointValue(req.body?.delta, 0);
     const note = String(req.body?.note || "").trim();
 
     if (!accountId) {
       return res.status(400).json({ error: "accountId is required" });
     }
     if (!Number.isFinite(delta) || delta === 0) {
-      return res.status(400).json({ error: "delta must be a non-zero integer" });
+      return res.status(400).json({ error: "delta must be a non-zero number" });
     }
 
     const account = await adjustAccountPoints(accountId, delta, {
@@ -1790,7 +1796,7 @@ app.post("/api/account/adjust", async (req, res) => {
       action: "billing.adjust_points",
       entityType: "billing_account",
       entityId: account.accountId,
-      summary: `${delta > 0 ? "Added" : "Removed"} ${Math.abs(delta)} points`,
+      summary: `${delta > 0 ? "Added" : "Removed"} ${toPointNumber(Math.abs(delta), 0)} points`,
       detail: {
         accountId: account.accountId,
         delta,
@@ -1864,7 +1870,7 @@ app.get("/api/admin/redeem-codes", async (req, res) => {
 app.post("/api/admin/redeem-codes", async (req, res) => {
   try {
     const actor = await requireSuperAdminAccess(req);
-    const points = Number.parseInt(String(req.body?.points || 0), 10);
+    const points = parsePositivePointValue(req.body?.points, 0);
     const quantity = Number.parseInt(String(req.body?.quantity || 1), 10);
     const note = String(req.body?.note || "").trim();
 

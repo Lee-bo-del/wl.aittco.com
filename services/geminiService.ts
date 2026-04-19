@@ -1,5 +1,7 @@
 ﻿import { getAuthorizedBillingHeaders } from '../src/services/accountIdentity';
 
+import { formatPoint } from '../src/utils/pointFormat';
+
 // API configuration
 // Production should use the relative /api path; local development uses http://localhost:3325/api.
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -152,8 +154,8 @@ const handleApiError = async (response: Response) => {
     }
 
     if (errJson?.code === 'INSUFFICIENT_POINTS') {
-        const currentPoints = Number(errJson?.currentPoints ?? 0);
-        const requiredPoints = Number(errJson?.requiredPoints ?? 0);
+        const currentPoints = formatPoint(errJson?.currentPoints ?? 0);
+        const requiredPoints = formatPoint(errJson?.requiredPoints ?? 0);
         throw new Error(`点数不足：当前 ${currentPoints} 点，需要 ${requiredPoints} 点`);
     }
 

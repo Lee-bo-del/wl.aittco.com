@@ -1,3 +1,5 @@
+const { toPointNumber } = require("./pointMath.cjs");
+
 const normalizeText = (value = "") => String(value || "").trim();
 
 const parseBoundaryDate = (value, { endOfDay = false } = {}) => {
@@ -120,19 +122,19 @@ const buildBillingLedgerReport = (entries = [], options = {}) => {
   };
 
   for (const entry of filteredEntries) {
-    const points = Number(entry.points || 0);
+    const points = toPointNumber(entry.points || 0);
     switch (normalizeText(entry.type)) {
       case "charge":
-        summary.spentPoints += points;
+        summary.spentPoints = toPointNumber(summary.spentPoints + points, 0);
         break;
       case "recharge":
-        summary.rechargedPoints += points;
+        summary.rechargedPoints = toPointNumber(summary.rechargedPoints + points, 0);
         break;
       case "refund":
-        summary.refundedPoints += points;
+        summary.refundedPoints = toPointNumber(summary.refundedPoints + points, 0);
         break;
       case "redeem_code":
-        summary.redeemedPoints += points;
+        summary.redeemedPoints = toPointNumber(summary.redeemedPoints + points, 0);
         break;
       default:
         break;

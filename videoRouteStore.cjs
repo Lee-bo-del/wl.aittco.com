@@ -1,4 +1,5 @@
 const staticCatalog = require("./config/videoRoutes.json");
+const { toNonNegativePoint } = require("./pointMath.cjs");
 const { fromDbDateTime, getPool, isMySqlConfigured, toDbDateTime, withTransaction } = require("./db.cjs");
 
 const VALID_TRANSPORTS = new Set(["openai-video"]);
@@ -20,8 +21,7 @@ const parseInteger = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 const parseDecimal = (value, fallback = 0) => {
-  const parsed = Number.parseFloat(String(value ?? fallback));
-  return Number.isFinite(parsed) ? parsed : fallback;
+  return toNonNegativePoint(value, fallback);
 };
 const trimTrailingSlash = (value = "") => trimToString(value).replace(/\/+$/, "");
 
@@ -124,7 +124,7 @@ const ensureVideoRouteSchema = async () => {
           allow_user_api_key_without_login TINYINT(1) NOT NULL DEFAULT 0,
           api_key LONGTEXT NULL,
           api_key_env VARCHAR(128) NULL,
-          point_cost DECIMAL(10,2) NOT NULL DEFAULT 0,
+          point_cost DECIMAL(10,1) NOT NULL DEFAULT 0,
           sort_order INT NOT NULL DEFAULT 0,
           is_active TINYINT(1) NOT NULL DEFAULT 1,
           is_default_route TINYINT(1) NOT NULL DEFAULT 0,
@@ -143,6 +143,16 @@ const ensureVideoRouteSchema = async () => {
           ALTER TABLE video_routes
           ADD COLUMN allow_user_api_key_without_login TINYINT(1) NOT NULL DEFAULT 0
             AFTER use_request_model
+        `);
+      }
+      const [pointCostColumns] = await pool.execute(
+        "SHOW COLUMNS FROM video_routes LIKE 'point_cost'",
+      );
+      const pointCostType = String(pointCostColumns?.[0]?.Type || "").toLowerCase();
+      if (!/^decimal\(\d+,\s*1\)$/.test(pointCostType)) {
+        await pool.execute(`
+          ALTER TABLE video_routes
+          MODIFY COLUMN point_cost DECIMAL(10,1) NOT NULL DEFAULT 0
         `);
       }
       await pool.execute(

@@ -1,4 +1,5 @@
 import videoModelCatalog from '../../config/videoModels.json';
+import { roundNonNegativePoint } from '../utils/pointFormat';
 
 export interface VideoModelConfig {
   id: string;
@@ -60,7 +61,7 @@ const normalizeModel = (model: Partial<VideoModelConfig> = {}): VideoModelConfig
   modelFamily: String(model.modelFamily || model.id || 'default').trim(),
   routeFamily: String(model.routeFamily || model.modelFamily || 'default').trim(),
   requestModel: String(model.requestModel || '').trim(),
-  selectorCost: Number(model.selectorCost || 0),
+  selectorCost: roundNonNegativePoint(model.selectorCost || 0, 0),
   maxReferenceImages: Math.max(0, Number(model.maxReferenceImages || 1)),
   referenceLabels: normalizeStringArray(model.referenceLabels || []),
   defaultAspectRatio: String(model.defaultAspectRatio || '16:9').trim(),
@@ -175,7 +176,8 @@ export const getVideoModelMaxReferenceImages = (modelId?: string) =>
 export const getVideoModelReferenceLabels = (modelId?: string) => getVideoModelById(modelId).referenceLabels || [];
 export const getVideoModelSupportsHd = (modelId?: string) => getVideoModelById(modelId).supportsHd === true;
 export const getVideoModelDefaultHd = (modelId?: string) => getVideoModelById(modelId).defaultHd === true;
-export const getVideoModelDisplayCost = (modelId?: string) => Number(getVideoModelById(modelId).selectorCost || 0);
+export const getVideoModelDisplayCost = (modelId?: string) =>
+  roundNonNegativePoint(getVideoModelById(modelId).selectorCost || 0, 0);
 export const getVideoModelRequestName = (modelId?: string) => {
   const model = getVideoModelById(modelId);
   return model.requestModel || model.id;
