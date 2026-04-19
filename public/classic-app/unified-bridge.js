@@ -1874,11 +1874,16 @@
     }
 
     if (submitRefImages.length > 0) {
-      const rawBase64Images = submitRefImages.map((imgData) =>
-        String(imgData || "").includes(",") ? String(imgData).split(",")[1] : String(imgData || ""),
+      const normalizedRefImages = submitRefImages
+        .map((imgData) => String(imgData || "").trim())
+        .filter((imgData) => imgData.length > 0);
+      const rawBase64Images = normalizedRefImages.map((imgData) =>
+        imgData.includes(",") ? imgData.split(",")[1] : imgData,
       );
-      payloadBase.image = rawBase64Images;
-      payloadBase.images = rawBase64Images;
+      const useDataUriReferences = selectedRoute?.requiresDataUriReferences === true;
+      const finalRefImages = useDataUriReferences ? normalizedRefImages : rawBase64Images;
+      payloadBase.image = finalRefImages;
+      payloadBase.images = finalRefImages;
     }
 
     for (let i = 0; i < batchSize; i += 1) {

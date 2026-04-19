@@ -217,6 +217,7 @@ const toPublicImageRoute = (route = {}) => ({
   line: String(route.line || "default").trim(),
   transport: String(route.transport || "openai-image").trim(),
   mode: String(route.mode || "async").trim(),
+  requiresDataUriReferences: isVisionaryImageRoute(route),
   allowUserApiKeyWithoutLogin: route.allowUserApiKeyWithoutLogin === true,
   pointCost: toPointNumber(route.pointCost || 0),
   sizeOverrides: toPublicImageRouteSizeOverrides(route.sizeOverrides),
@@ -337,10 +338,66 @@ const isGeminiNativeStylePath = (route) => {
   const generatePath = String(route?.generatePath || "");
   return generatePath.includes("{model}") || /generatecontent/i.test(generatePath);
 };
+const isVisionaryImageRoute = (route) => {
+  const baseUrl = String(route?.baseUrl || "").trim().toLowerCase();
+  const generatePath = String(route?.generatePath || "").trim().toLowerCase();
+  return baseUrl.includes("visionary.beer") || generatePath.includes("/openapi/v1/images/generations");
+};
 const isGeminiNativeRoute = (route) =>
   route?.transport === "gemini-native" || isGeminiNativeStylePath(route);
 const isOpenAiImageRoute = (route) =>
   route?.transport === "openai-image" && !isGeminiNativeStylePath(route);
+const looksLikeBase64Image = (value = "") => {
+  const compact = String(value || "").replace(/\s+/g, "");
+  if (!compact || compact.length < 80) return false;
+  return /^[A-Za-z0-9+/_-]+={0,2}$/.test(compact);
+};
+const guessDataUriMimeType = (base64 = "") => {
+  const head = String(base64 || "").slice(0, 16);
+  if (head.startsWith("iVBOR")) return "image/png";
+  if (head.startsWith("/9j/")) return "image/jpeg";
+  if (head.startsWith("R0lGOD")) return "image/gif";
+  if (head.startsWith("UklGR")) return "image/webp";
+  return "image/png";
+};
+const ensureDataUriImage = (value) => {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^data:image\//i.test(trimmed)) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const compact = trimmed.replace(/\s+/g, "");
+  if (!looksLikeBase64Image(compact)) return trimmed;
+  const mimeType = guessDataUriMimeType(compact);
+  return `data:${mimeType};base64,${compact}`;
+};
+const applyVisionaryImageCompat = (requestBody = {}) => {
+  const normalizeArray = (value) => {
+    if (Array.isArray(value)) {
+      return value.map((item) => ensureDataUriImage(item)).filter((item) => String(item || "").trim().length > 0);
+    }
+    const normalized = ensureDataUriImage(value);
+    return normalized ? [normalized] : [];
+  };
+
+  const imageArray =
+    normalizeArray(requestBody.images).length > 0
+      ? normalizeArray(requestBody.images)
+      : normalizeArray(requestBody.image);
+  if (imageArray.length > 0) {
+    requestBody.images = imageArray;
+    requestBody.image = imageArray;
+  }
+
+  if (!requestBody.ratio && requestBody.aspect_ratio) {
+    requestBody.ratio = requestBody.aspect_ratio;
+  }
+  const resolvedImageSize =
+    requestBody.imageSize || requestBody.image_size || requestBody.size || "";
+  if (resolvedImageSize && !requestBody.imageSize) {
+    requestBody.imageSize = String(resolvedImageSize).trim().toUpperCase();
+  }
+};
 const getRoutePointCost = (route, quantity = 1, requestBody = {}) => {
   const sizeOverride = getRouteSizeOverride(route, requestBody);
   const pointCost = toPointNumber(sizeOverride?.pointCost ?? route?.pointCost ?? 0);
@@ -2698,6 +2755,10 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
       delete requestBody.image_urls;
       delete requestBody.reference_image_url;
       delete requestBody.reference_image_urls;
+    }
+
+    if (isVisionaryImageRoute(route)) {
+      applyVisionaryImageCompat(requestBody);
     }
 
     const DOUBAO_RESOLUTIONS = {
