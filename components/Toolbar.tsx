@@ -13,7 +13,6 @@ interface ToolbarProps {
   onOpenInstructions: () => void;
   onArrange: () => void;
   onOpenReversePrompt?: () => void;
-  onOpenBatchModal: () => void;
   onDownloadAllCanvas: () => void;
   isDownloadingCanvas?: boolean;
   onOpenClassicMode: () => void;
@@ -27,7 +26,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onOpenInstructions,
   onArrange,
   onOpenReversePrompt,
-  onOpenBatchModal,
   onDownloadAllCanvas,
   isDownloadingCanvas,
   onOpenClassicMode,
@@ -169,7 +167,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
           icon={<Box size={20} strokeWidth={1.5} />} 
           actions={[
             { icon: <ScanSearch size={16} />, label: "图片反推 (Shift+R)", onClick: () => onOpenReversePrompt && onOpenReversePrompt() },
-            { icon: <Box size={16} />, label: "批量生成", onClick: onOpenBatchModal },
             { icon: <MessageSquare size={16} />, label: showTooltips ? "隐藏提示" : "显示提示", onClick: toggleTooltips },
             { icon: <Trash2 size={16} />, label: "清空画布 (Ctrl+Shift+Del)", onClick: onClearAll, danger: true },
           ]} 

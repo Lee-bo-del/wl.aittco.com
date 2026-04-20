@@ -56,7 +56,6 @@ interface ControlPanelProps {
   onInitGenerations: (count: number, prompt: string, aspectRatio?: string, baseNode?: NodeData, type?: 'IMAGE' | 'VIDEO') => string[];
   onUpdateGeneration: (id: string, src: string | null, error?: string, taskId?: string) => void;
   onUpdateProgress?: (id: string, progress: number) => void;
-  onOpenBatchModal: () => void;
 }
 
 interface DragState {
@@ -84,7 +83,7 @@ type GenerationAccessState =
   | 'missing_credentials'
   | 'invalid_api_key';
 
-const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGenerations, onUpdateGeneration, onUpdateProgress, onOpenBatchModal }) => {
+const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGenerations, onUpdateGeneration, onUpdateProgress }) => {
   useImageRouteCatalog();
   useImageModelCatalog();
   useVideoRouteCatalog();
@@ -1442,10 +1441,6 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
       setError("请先输入提示词");
       return;
     }
-    if (!apiKey) {
-      setError("请先在设置中输入 API Key");
-      return;
-    }
 
     setIsOptimizing(true);
     setError(null);
@@ -1453,7 +1448,7 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
 
     try {
       const type = isVideoMode ? 'VIDEO' : 'IMAGE';
-      const options = await optimizePrompt(apiKey, prompt, type);
+      const options = await optimizePrompt(prompt, type);
       setPromptOptions(options);
       setSelectedOptionIndex(0);
       setShowOptionsPanel(true);

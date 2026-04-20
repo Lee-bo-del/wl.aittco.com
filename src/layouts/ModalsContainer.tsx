@@ -1,7 +1,6 @@
 import React from 'react';
 import SettingsModal from '../../components/SettingsModal';
 import ReversePromptModal from '../../components/ReversePromptModal';
-import BatchProcessModal from '../../components/BatchProcessModal';
 import InstructionsModal from '../../components/InstructionsModal';
 import ContextMenu from '../../components/ContextMenu';
 import AnnouncementPopup from '../../components/AnnouncementPopup';
@@ -19,12 +18,6 @@ interface ModalsContainerProps {
   reversePromptOpen: boolean;
   onCloseReversePrompt: () => void;
   onUsePrompt: (prompt: string) => void;
-
-  batchModalOpen: boolean;
-  onCloseBatchModal: () => void;
-  batchApiKey: string | null;
-  onInitGenerations: (count: number, prompt: string, aspectRatio?: string, baseNode?: any, type?: 'IMAGE' | 'VIDEO') => string[];
-  onUpdateGeneration: (id: string, src: string | null, error?: string, taskId?: string) => void;
 
   instructionsOpen: boolean;
   onCloseInstructions: () => void;
@@ -54,11 +47,6 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = ({
   reversePromptOpen,
   onCloseReversePrompt,
   onUsePrompt,
-  batchModalOpen,
-  onCloseBatchModal,
-  batchApiKey,
-  onInitGenerations,
-  onUpdateGeneration,
   instructionsOpen,
   onCloseInstructions,
   lightboxImage,
@@ -88,14 +76,6 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = ({
         isOpen={reversePromptOpen}
         onClose={onCloseReversePrompt}
         onUsePrompt={onUsePrompt}
-      />
-
-      <BatchProcessModal
-        isOpen={batchModalOpen}
-        onClose={onCloseBatchModal}
-        apiKey={batchApiKey}
-        onInitGenerations={onInitGenerations}
-        onUpdateGeneration={onUpdateGeneration}
       />
 
       <InstructionsModal

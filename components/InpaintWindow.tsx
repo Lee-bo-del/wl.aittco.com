@@ -6,7 +6,9 @@ import { useSelectionStore } from '../src/store/selectionStore';
 import { useCanvasStore } from '../src/store/canvasStore';
 import { renderMaskToDataURL } from '../src/utils/imageUtils';
 import { editImageApi } from '../src/services/api';
+import { getStoredAuthSessionToken } from '../src/services/accountIdentity';
 import { useGenerationLogic } from '../src/hooks/useGenerationLogic';
+import { getSelectedImageRoute } from '../src/config/imageRoutes';
 import ModelSelector, { ModelOption } from './ModelSelector';
 
 type MaskMode = 'transparent' | 'binary';
@@ -59,7 +61,8 @@ export const InpaintWindow: React.FC = () => {
     toolMode,
     setToolMode,
     selectedIds,
-    apiKey,
+    imageModel,
+    imageLine,
     prompt,
     setPrompt,
     quantity,
@@ -87,6 +90,7 @@ export const InpaintWindow: React.FC = () => {
   );
   const isImageSelected = selectedNode?.type === 'IMAGE' && !selectedNode.loading;
   const hasStrokes = !!(selectedNode?.maskStrokes && selectedNode.maskStrokes.length > 0);
+  const selectedImageRoute = getSelectedImageRoute(imageModel, imageLine);
 
   const modelOptions: ModelOption[] = useMemo(
     () =>
@@ -104,7 +108,7 @@ export const InpaintWindow: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return setError('请输入重绘提示词');
-    if (!apiKey.trim()) return setError('请先在设置中输入 API Key');
+    if (!getStoredAuthSessionToken()) return setError('请先登录后再使用局部重绘');
     if (!selectedNode || !selectedNode.src || !hasStrokes) {
       return setError('请先在画布图片上涂抹遮罩区域后再提交');
     }
@@ -163,8 +167,9 @@ export const InpaintWindow: React.FC = () => {
             size: reqImageSize,
             aspect_ratio: effectiveRatio,
             mask_mode: maskMode,
+            routeId: selectedImageRoute.id,
           };
-          const res = await editImageApi(apiKey, payload);
+          const res = await editImageApi(undefined, payload);
           onUpdateGeneration(pid, null, undefined, res.taskId);
           return res.taskId;
         }),

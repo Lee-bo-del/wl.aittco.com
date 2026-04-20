@@ -3802,6 +3802,8 @@ const GEMINI_FALLBACK_MODELS = [
   "gemini-3-po-preview",
   "gemini-3-flash-preview",
 ];
+const PROMPT_OPTIMIZE_POINT_COST = 0.5;
+const REVERSE_PROMPT_POINT_COST = 0.5;
 
 function buildGeminiGenerateEndpoint(model) {
   return `https://api.bltcy.ai/v1beta/models/${model}:generateContent`;
@@ -3852,17 +3854,37 @@ async function postGeminiWithFallback({
   throw lastError;
 }
 
+const resolvePromptToolAuthorization = async () => {
+  const directGeminiKey = normalizeAuthorization(process.env.GEMINI_API_KEY);
+  if (directGeminiKey) {
+    return directGeminiKey;
+  }
+
+  const route = await resolveImageRoute(undefined, { includeInactive: true });
+  return getRouteAuthorization(route, null);
+};
+
 app.post("/api/optimize-prompt", async (req, res) => {
+  let billingAccount = null;
+  let billingCharge = null;
   try {
-    const userKey = req.headers["authorization"];
-    if (!userKey || String(userKey).length < 10) {
-      return res.status(401).json({ error: "Invalid API Key" });
-    }
+    billingAccount = await requireBillingAccount(req);
 
     const { prompt, type = "IMAGE" } = req.body || {};
     if (!prompt || !String(prompt).trim()) {
       return res.status(400).json({ error: "Prompt is required" });
     }
+    const userKey = await resolvePromptToolAuthorization();
+    billingCharge = await reservePoints(
+      billingAccount.accountId,
+      PROMPT_OPTIMIZE_POINT_COST,
+      {
+        action: "prompt_optimize",
+        routeId: "prompt-tools",
+        mode: "sync",
+        model: GEMINI_FALLBACK_MODELS[0],
+      },
+    );
 
     const geminiModels = [...GEMINI_FALLBACK_MODELS];
     const isVideo = String(type).toUpperCase() === "VIDEO";
@@ -3903,12 +3925,31 @@ app.post("/api/optimize-prompt", async (req, res) => {
       return res.json({
         success: true,
         options: [{ style: "优化结果", prompt: String(rawText).trim() }],
+        billing: {
+          deductedPoints: PROMPT_OPTIMIZE_POINT_COST,
+          remainingPoints: billingCharge?.account?.points,
+        },
       });
     }
 
-    return res.json({ success: true, options });
+    return res.json({
+      success: true,
+      options,
+      billing: {
+        deductedPoints: PROMPT_OPTIMIZE_POINT_COST,
+        remainingPoints: billingCharge?.account?.points,
+      },
+    });
   } catch (error) {
+    if (billingCharge?.chargeId && billingAccount?.accountId) {
+      await refundPoints(billingAccount.accountId, billingCharge.chargeId, {
+        reason: "request_failed",
+        routeId: "prompt-tools",
+      });
+    }
     console.error("[Optimize] Error:", error.message);
+    if (sendAuthError(res, error)) return;
+    if (sendBillingError(res, error)) return;
     if (error.response) {
       return res
         .status(error.response.status)
@@ -3923,16 +3964,26 @@ app.post("/api/optimize-prompt", async (req, res) => {
 
 // ==================== Reverse Prompt API ====================
 app.post("/api/reverse-prompt", async (req, res) => {
+  let billingAccount = null;
+  let billingCharge = null;
   try {
-    const userKey = req.headers["authorization"];
-    if (!userKey || String(userKey).length < 10) {
-      return res.status(401).json({ error: "Invalid API Key" });
-    }
+    billingAccount = await requireBillingAccount(req);
 
     const image = req.body?.image;
     if (!image) {
       return res.status(400).json({ error: "Image is required" });
     }
+    const userKey = await resolvePromptToolAuthorization();
+    billingCharge = await reservePoints(
+      billingAccount.accountId,
+      REVERSE_PROMPT_POINT_COST,
+      {
+        action: "reverse_prompt",
+        routeId: "prompt-tools",
+        mode: "sync",
+        model: GEMINI_FALLBACK_MODELS[0],
+      },
+    );
 
     const base64Image = String(image).replace(/^data:image\/(png|jpeg|webp);base64,/, "");
     const geminiModels = [...GEMINI_FALLBACK_MODELS];
@@ -3975,9 +4026,24 @@ app.post("/api/reverse-prompt", async (req, res) => {
       return res.status(500).json({ error: "Reverse failed: empty response" });
     }
 
-    return res.json({ success: true, prompt: String(resultPrompt).trim() });
+    return res.json({
+      success: true,
+      prompt: String(resultPrompt).trim(),
+      billing: {
+        deductedPoints: REVERSE_PROMPT_POINT_COST,
+        remainingPoints: billingCharge?.account?.points,
+      },
+    });
   } catch (error) {
+    if (billingCharge?.chargeId && billingAccount?.accountId) {
+      await refundPoints(billingAccount.accountId, billingCharge.chargeId, {
+        reason: "request_failed",
+        routeId: "prompt-tools",
+      });
+    }
     console.error("[Reverse] Error:", error.message);
+    if (sendAuthError(res, error)) return;
+    if (sendBillingError(res, error)) return;
     if (error.response) {
       return res
         .status(error.response.status)

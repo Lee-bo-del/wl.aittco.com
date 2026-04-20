@@ -223,8 +223,6 @@ const App: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<"settings" | "history">("settings");
   const [reversePromptOpen, setReversePromptOpen] = useState(false);
-  const [batchModalOpen, setBatchModalOpen] = useState(false);
-  const handleOpenBatch = useCallback(() => setBatchModalOpen(true), []);
   const [instructionsOpen, setInstructionsOpen] = useState(false);
 
   // Mobile Detection - Use 640px threshold to avoid F12 devtools triggering mobile view
@@ -381,11 +379,6 @@ const App: React.FC = () => {
              reversePromptOpen={false}
              onCloseReversePrompt={() => {}}
              onUsePrompt={() => {}}
-             batchModalOpen={false}
-             onCloseBatchModal={() => {}}
-             batchApiKey=""
-             onInitGenerations={() => []}
-             onUpdateGeneration={async () => {}}
              instructionsOpen={false}
              onCloseInstructions={() => {}}
              lightboxImage={lightboxImage}
@@ -417,7 +410,6 @@ const App: React.FC = () => {
           onInitGenerations={handleInitGenerations}
           onUpdateGeneration={handleUpdateGeneration}
           onUpdateProgress={handleUpdateProgress}
-          onOpenBatchModal={handleOpenBatch}
         />
         <InpaintWindow />
         <ModalsContainer
@@ -448,11 +440,6 @@ const App: React.FC = () => {
           reversePromptOpen={false}
           onCloseReversePrompt={() => {}}
           onUsePrompt={() => {}}
-          batchModalOpen={false}
-          onCloseBatchModal={() => {}}
-          batchApiKey=""
-          onInitGenerations={() => []}
-          onUpdateGeneration={async () => {}}
           instructionsOpen={false}
           onCloseInstructions={() => {}}
           showClearConfirm={false}
@@ -498,7 +485,6 @@ const App: React.FC = () => {
           onOpenInstructions={() => setInstructionsOpen(true)}
           onArrange={handleArrangeNodes}
           onOpenReversePrompt={() => setReversePromptOpen(true)}
-          onOpenBatchModal={handleOpenBatch}
           onDownloadAllCanvas={handleDownloadAllCanvas}
           isDownloadingCanvas={isDownloadingCanvas}
           onOpenClassicMode={openClassicMode}
@@ -510,7 +496,6 @@ const App: React.FC = () => {
           onInitGenerations={handleInitGenerations}
           onUpdateGeneration={handleUpdateGeneration}
           onUpdateProgress={handleUpdateProgress}
-          onOpenBatchModal={handleOpenBatch}
         />
 
         <InpaintWindow />
@@ -543,11 +528,6 @@ const App: React.FC = () => {
             useSelectionStore.getState().setPendingPrompt(prompt);
             setToolMode(ToolMode.GENERATE);
           }}
-          batchModalOpen={batchModalOpen}
-          onCloseBatchModal={() => setBatchModalOpen(false)}
-          batchApiKey={useSelectionStore.getState().apiKey}
-          onInitGenerations={handleInitGenerations}
-          onUpdateGeneration={handleUpdateGeneration}
           instructionsOpen={instructionsOpen}
           onCloseInstructions={() => setInstructionsOpen(false)}
           lightboxImage={lightboxImage}

@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import GlassModal from './GlassModal';
 import { reversePrompt } from '../services/reversePromptService';
-import { useSelectionStore } from '../src/store/selectionStore';
 
 interface ReversePromptModalProps {
     isOpen: boolean;
@@ -18,7 +17,6 @@ interface ReversePromptModalProps {
 }
 
 const ReversePromptModal: React.FC<ReversePromptModalProps> = ({ isOpen, onClose, onUsePrompt }) => {
-    const apiKey = useSelectionStore((state) => state.apiKey);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -58,12 +56,7 @@ const ReversePromptModal: React.FC<ReversePromptModalProps> = ({ isOpen, onClose
         setError(null);
 
         try {
-            const trimmedApiKey = apiKey.trim();
-            if (!trimmedApiKey) {
-                throw new Error('请先在设置中配置 API Key');
-            }
-
-            const prompt = await reversePrompt(trimmedApiKey, imageFile);
+            const prompt = await reversePrompt(imageFile);
             setResult(prompt);
         } catch (err: any) {
             setError(err.message || '分析失败，请重试');
