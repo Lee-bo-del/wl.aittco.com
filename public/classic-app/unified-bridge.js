@@ -565,7 +565,7 @@
     const badgeEl = document.getElementById("brandBadge4k");
 
     if (titleEl) {
-      titleEl.textContent = "武陵商城";
+      titleEl.textContent = "武陵商贸";
     }
     if (subEl) {
       if (isSessionAuthenticated()) {
@@ -578,7 +578,7 @@
     }
     if (badgeEl) {
       badgeEl.style.display = "inline-flex";
-      badgeEl.textContent = "武陵商城";
+      badgeEl.textContent = "武陵商贸";
     }
   };
   const updateLegacyAdminVisibility = () => {

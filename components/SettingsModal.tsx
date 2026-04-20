@@ -731,7 +731,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 	              )}
 
 	              <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 text-xs text-blue-100/80">
-	                当前站点为武陵商城专属版，已移除外部购买与客服入口，账号点数请通过站内流程管理。
+	                当前站点为武陵商贸专属版，已移除外部购买与客服入口，账号点数请通过站内流程管理。
 	              </div>
 	            </div>
 	          ) : (

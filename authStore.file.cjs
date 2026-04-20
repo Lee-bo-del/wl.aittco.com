@@ -231,7 +231,7 @@ const describeEmailCodePurpose = (purpose = "login") => {
 const sendEmailCode = async (email, code, { purpose = "login" } = {}) => {
   const transporter = createTransporter();
   const from = String(process.env.SMTP_FROM || process.env.SMTP_USER || "").trim();
-const appName = String(process.env.APP_NAME || "武陵商城").trim();
+const appName = String(process.env.APP_NAME || "武陵商贸").trim();
   const purposeMeta = describeEmailCodePurpose(purpose);
 
   if (!transporter || !from) {

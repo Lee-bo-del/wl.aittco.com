@@ -46,10 +46,10 @@ const MobileView: React.FC<MobileViewProps> = ({
     >
       <div className="shrink-0 sticky top-0 z-20 bg-neutral-900/95 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-2 min-w-0">
-          <img src={logo} alt="武陵商城" className="w-5 h-5 opacity-90" />
+          <img src={logo} alt="武陵商贸" className="w-5 h-5 opacity-90" />
           <h1 className="text-lg font-bold text-white tracking-tight truncate">
             <span className="bg-gradient-to-r from-sky-300 via-cyan-400 to-blue-500 bg-clip-text text-transparent">
-              武陵商城
+              武陵商贸
             </span>
           </h1>
           <div className="bg-white/10 rounded-full px-2 py-0.5 text-[11px] text-white font-medium">

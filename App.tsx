@@ -553,10 +553,10 @@ const App: React.FC = () => {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center select-none w-full max-w-2xl mt-[-5vh]">
             <div className="mb-12 flex items-end justify-center gap-3">
               <h1 className="text-4xl font-black tracking-tight leading-none bg-gradient-to-b from-sky-300 via-cyan-400 to-blue-600 bg-clip-text text-transparent sm:text-5xl">
-                武陵商城
+                武陵商贸
               </h1>
               <span className="inline-flex items-center rounded-md border border-red-300/35 bg-linear-to-r from-red-500 to-red-600 px-3 py-1 text-sm font-bold text-white shadow-[0_0_18px_rgba(239,68,68,0.38)]">
-                武陵商城
+                武陵商贸
               </span>
             </div>
 
@@ -577,7 +577,7 @@ const App: React.FC = () => {
               </h2>
 
               <p className="text-gray-400 text-sm leading-relaxed mb-8 max-w-sm">
-                武陵商城企业创作平台已启用。请先登录企业账号，再使用创作与管理能力。
+                武陵商贸企业创作平台已启用。请先登录企业账号，再使用创作与管理能力。
               </p>
 
               <button
@@ -590,7 +590,7 @@ const App: React.FC = () => {
               </button>
 
               <p className="mt-5 rounded-xl border border-cyan-400/20 bg-cyan-500/8 px-4 py-2 text-xs text-cyan-100/80">
-                站点已切换为武陵商城专属版本，外部购买与客服入口已关闭。
+                站点已切换为武陵商贸专属版本，外部购买与客服入口已关闭。
               </p>
             </div>
 

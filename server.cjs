@@ -686,10 +686,10 @@ const buildAdminDashboardPayload = async () => {
     getAdminBillingOverview({
       recentWindowHours: 24,
     }),
-    getImageRouteCatalog({ includeInactive: true }),
-    getImageModelCatalog({ includeInactive: true }),
-    getVideoRouteCatalog({ includeInactive: true }),
-    getVideoModelCatalog({ includeInactive: true }),
+    getImageRouteCatalog(),
+    getImageModelCatalog(),
+    getVideoRouteCatalog(),
+    getVideoModelCatalog(),
   ]);
 
   const combinedRouteCatalog = {
@@ -724,13 +724,36 @@ const buildAdminDashboardPayload = async () => {
     ],
   };
 
+  const visibleRouteIds = new Set(
+    (combinedRouteCatalog.routes || []).map((route) => String(route?.id || "").trim()),
+  );
+  const visibleModelIds = new Set(
+    (combinedModelCatalog.models || []).map((model) => String(model?.id || "").trim()),
+  );
+  const visibleModelRequestNames = new Set(
+    (combinedModelCatalog.models || [])
+      .map((model) => String(model?.requestModel || "").trim())
+      .filter(Boolean),
+  );
+  const filteredRouteRuntimeStats = (billingOverview?.routeStats || []).filter((item) =>
+    visibleRouteIds.has(String(item?.routeId || "").trim()),
+  );
+  const filteredModelRuntimeStats = (billingOverview?.modelStats || []).filter((item) => {
+    const modelId = String(item?.modelId || "").trim();
+    const requestModel = String(item?.requestModel || "").trim();
+    return (
+      (modelId && visibleModelIds.has(modelId)) ||
+      (requestModel && visibleModelRequestNames.has(requestModel))
+    );
+  });
+
   const routeStats = mergeAdminRouteRuntimeStats(
     combinedRouteCatalog,
-    billingOverview?.routeStats || [],
+    filteredRouteRuntimeStats,
   );
   const modelStats = mergeAdminModelRuntimeStats(
     combinedModelCatalog,
-    billingOverview?.modelStats || [],
+    filteredModelRuntimeStats,
   );
   const imageRouteStats = routeStats.filter((item) => item.mediaType === "image");
   const videoRouteStats = routeStats.filter((item) => item.mediaType === "video");
