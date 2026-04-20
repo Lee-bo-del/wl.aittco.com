@@ -60,6 +60,14 @@
     passwordPanelOpen: false,
   };
   const remotePendingPollRegistry = new Set();
+  const REMOTE_PENDING_TTL_MS = 20 * 60 * 1000;
+  const isRecentPendingRecord = (record) => {
+    const createdAt = String(record?.createdAt || "").trim();
+    if (!createdAt) return true;
+    const ts = new Date(createdAt).getTime();
+    if (!Number.isFinite(ts) || Number.isNaN(ts)) return true;
+    return Date.now() - ts <= REMOTE_PENDING_TTL_MS;
+  };
 
   const cleanUrl = (url) => String(url || "").replace(/\/$/, "");
   const escapeHtmlText = (value) =>
@@ -1574,8 +1582,11 @@
         pageSize: 100,
       });
       const records = Array.isArray(result?.records) ? result.records : [];
-      renderRemotePendingTasks(records);
-      records
+      const activePendingRecords = records.filter(
+        (record) => record?.taskId && isRecentPendingRecord(record),
+      );
+      renderRemotePendingTasks(activePendingRecords);
+      activePendingRecords
         .filter((record) => record?.taskId)
         .forEach((record, index) => {
           if (remotePendingPollRegistry.has(record.taskId)) return;
