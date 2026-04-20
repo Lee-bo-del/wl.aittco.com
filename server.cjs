@@ -692,15 +692,53 @@ const buildAdminDashboardPayload = async () => {
     getVideoModelCatalog(),
   ]);
 
+  const visibleImageRouteFamilies = new Set(
+    (imageModelCatalog?.models || [])
+      .filter((model) => model?.isActive !== false)
+      .map((model) => String(model?.routeFamily || "").trim())
+      .filter(Boolean),
+  );
+  const visibleVideoRouteFamilies = new Set(
+    (videoModelCatalog?.models || [])
+      .filter((model) => model?.isActive !== false)
+      .map((model) => String(model?.routeFamily || "").trim())
+      .filter(Boolean),
+  );
+  const visibleImageRoutes = (imageRouteCatalog?.routes || []).filter((route) =>
+    visibleImageRouteFamilies.has(String(route?.modelFamily || "").trim()),
+  );
+  const visibleVideoRoutes = (videoRouteCatalog?.routes || []).filter((route) =>
+    visibleVideoRouteFamilies.has(String(route?.routeFamily || "").trim()),
+  );
+  const visibleImageRouteFamilySet = new Set(
+    visibleImageRoutes.map((route) => String(route?.modelFamily || "").trim()).filter(Boolean),
+  );
+  const visibleVideoRouteFamilySet = new Set(
+    visibleVideoRoutes.map((route) => String(route?.routeFamily || "").trim()).filter(Boolean),
+  );
+  const visibleImageModels = (imageModelCatalog?.models || []).filter((model) => {
+    if (model?.isActive === false) return false;
+    const routeFamily = String(model?.routeFamily || "").trim();
+    return routeFamily ? visibleImageRouteFamilySet.has(routeFamily) : true;
+  });
+  const visibleVideoModels = (videoModelCatalog?.models || []).filter((model) => {
+    if (model?.isActive === false) return false;
+    const routeFamily = String(model?.routeFamily || "").trim();
+    return routeFamily ? visibleVideoRouteFamilySet.has(routeFamily) : false;
+  });
+
   const combinedRouteCatalog = {
-    defaultRouteId: imageRouteCatalog?.defaultRouteId || "",
+    defaultRouteId:
+      visibleImageRoutes.find((route) => route?.isDefaultRoute === true)?.id ||
+      visibleImageRoutes[0]?.id ||
+      "",
     defaultNanoBananaLine: imageRouteCatalog?.defaultNanoBananaLine || "",
     routes: [
-      ...((imageRouteCatalog?.routes || []).map((route) => ({
+      ...(visibleImageRoutes.map((route) => ({
         ...route,
         mediaType: "image",
       }))),
-      ...((videoRouteCatalog?.routes || []).map((route) => ({
+      ...(visibleVideoRoutes.map((route) => ({
         ...route,
         modelFamily: route.routeFamily,
         mediaType: "video",
@@ -709,13 +747,16 @@ const buildAdminDashboardPayload = async () => {
     ],
   };
   const combinedModelCatalog = {
-    defaultModelId: imageModelCatalog?.defaultModelId || "",
+    defaultModelId:
+      visibleImageModels.find((model) => model?.isDefaultModel === true)?.id ||
+      visibleImageModels[0]?.id ||
+      "",
     models: [
-      ...((imageModelCatalog?.models || []).map((model) => ({
+      ...(visibleImageModels.map((model) => ({
         ...model,
         mediaType: "image",
       }))),
-      ...((videoModelCatalog?.models || []).map((model) => ({
+      ...(visibleVideoModels.map((model) => ({
         ...model,
         mediaType: "video",
         panelLayout: "video",
@@ -771,31 +812,23 @@ const buildAdminDashboardPayload = async () => {
     auth: authOverview,
     billing: billingOverview?.overall || null,
     routeCatalog: {
-      defaultRouteId: imageRouteCatalog?.defaultRouteId || "",
+      defaultRouteId: combinedRouteCatalog.defaultRouteId,
       defaultNanoBananaLine: imageRouteCatalog?.defaultNanoBananaLine || "",
       totalRoutes: combinedRouteCatalog.routes.length,
       activeRoutes: combinedRouteCatalog.routes.filter((route) => route.isActive !== false).length,
-      imageTotalRoutes: Array.isArray(imageRouteCatalog?.routes) ? imageRouteCatalog.routes.length : 0,
-      imageActiveRoutes: Array.isArray(imageRouteCatalog?.routes)
-        ? imageRouteCatalog.routes.filter((route) => route.isActive !== false).length
-        : 0,
-      videoTotalRoutes: Array.isArray(videoRouteCatalog?.routes) ? videoRouteCatalog.routes.length : 0,
-      videoActiveRoutes: Array.isArray(videoRouteCatalog?.routes)
-        ? videoRouteCatalog.routes.filter((route) => route.isActive !== false).length
-        : 0,
+      imageTotalRoutes: visibleImageRoutes.length,
+      imageActiveRoutes: visibleImageRoutes.filter((route) => route.isActive !== false).length,
+      videoTotalRoutes: visibleVideoRoutes.length,
+      videoActiveRoutes: visibleVideoRoutes.filter((route) => route.isActive !== false).length,
     },
     modelCatalog: {
-      defaultModelId: imageModelCatalog?.defaultModelId || "",
+      defaultModelId: combinedModelCatalog.defaultModelId,
       totalModels: combinedModelCatalog.models.length,
       activeModels: combinedModelCatalog.models.filter((model) => model.isActive !== false).length,
-      imageTotalModels: Array.isArray(imageModelCatalog?.models) ? imageModelCatalog.models.length : 0,
-      imageActiveModels: Array.isArray(imageModelCatalog?.models)
-        ? imageModelCatalog.models.filter((model) => model.isActive !== false).length
-        : 0,
-      videoTotalModels: Array.isArray(videoModelCatalog?.models) ? videoModelCatalog.models.length : 0,
-      videoActiveModels: Array.isArray(videoModelCatalog?.models)
-        ? videoModelCatalog.models.filter((model) => model.isActive !== false).length
-        : 0,
+      imageTotalModels: visibleImageModels.length,
+      imageActiveModels: visibleImageModels.filter((model) => model.isActive !== false).length,
+      videoTotalModels: visibleVideoModels.length,
+      videoActiveModels: visibleVideoModels.filter((model) => model.isActive !== false).length,
     },
     routeStats,
     modelStats,
