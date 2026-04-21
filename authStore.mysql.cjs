@@ -1194,6 +1194,110 @@ const updateAdminUser = async (actor, userId, changes = {}) => {
   });
 };
 
+const assertAdminCanManageRegularUser = (actor, targetUser) => {
+  if (!hasAdminRole(actor?.role)) {
+    throw new AuthError("ADMIN_REQUIRED", "Administrator access is required");
+  }
+
+  const targetRole = normalizeRole(targetUser?.role, "user");
+  if (targetRole !== "user") {
+    throw new AuthError(
+      "ADMIN_TARGET_RESTRICTED",
+      "Administrators can only manage regular users",
+    );
+  }
+};
+
+const resetAdminManagedUserPassword = async (
+  actor,
+  userId,
+  nextPassword = "1234567890",
+) => {
+  await ensureAuthSchema();
+  const targetUserId = String(userId || "").trim();
+  if (!targetUserId) {
+    throw new AuthError("USER_NOT_FOUND", "User does not exist");
+  }
+
+  const normalizedPassword = String(nextPassword || "").trim();
+  validatePassword(normalizedPassword);
+
+  return withTransaction(async (connection) => {
+    await cleanupExpiredAuthArtifacts(connection);
+    const [rows] = await connection.execute(
+      "SELECT * FROM auth_users WHERE user_id = ? LIMIT 1 FOR UPDATE",
+      [targetUserId],
+    );
+    const existing = rows[0];
+    if (!existing) {
+      throw new AuthError("USER_NOT_FOUND", "User does not exist");
+    }
+
+    assertAdminCanManageRegularUser(actor, existing);
+
+    const nowDb = toDbDateTime();
+    const passwordHash = await hashPassword(normalizedPassword);
+    await connection.execute(
+      `
+        UPDATE auth_users
+        SET password_hash = ?, password_updated_at = ?, updated_at = ?
+        WHERE user_id = ?
+      `,
+      [passwordHash, nowDb, nowDb, targetUserId],
+    );
+    await connection.execute("DELETE FROM auth_sessions WHERE user_id = ?", [targetUserId]);
+
+    return toPublicUser({
+      ...existing,
+      password_hash: passwordHash,
+      password_updated_at: nowDb,
+      updated_at: nowDb,
+    });
+  });
+};
+
+const setAdminManagedUserStatus = async (actor, userId, status) => {
+  await ensureAuthSchema();
+  const targetUserId = String(userId || "").trim();
+  if (!targetUserId) {
+    throw new AuthError("USER_NOT_FOUND", "User does not exist");
+  }
+
+  return withTransaction(async (connection) => {
+    await cleanupExpiredAuthArtifacts(connection);
+    const [rows] = await connection.execute(
+      "SELECT * FROM auth_users WHERE user_id = ? LIMIT 1 FOR UPDATE",
+      [targetUserId],
+    );
+    const existing = rows[0];
+    if (!existing) {
+      throw new AuthError("USER_NOT_FOUND", "User does not exist");
+    }
+
+    assertAdminCanManageRegularUser(actor, existing);
+
+    const nextStatus = normalizeStatus(status, normalizeStatus(existing.status, "active"));
+    if (!["active", "disabled"].includes(nextStatus)) {
+      throw new AuthError("INVALID_USER_STATUS", "Unsupported user status");
+    }
+
+    const nowDb = toDbDateTime();
+    await connection.execute(
+      "UPDATE auth_users SET status = ?, updated_at = ? WHERE user_id = ?",
+      [nextStatus, nowDb, targetUserId],
+    );
+    if (nextStatus !== "active") {
+      await connection.execute("DELETE FROM auth_sessions WHERE user_id = ?", [targetUserId]);
+    }
+
+    return toPublicUser({
+      ...existing,
+      status: nextStatus,
+      updated_at: nowDb,
+    });
+  });
+};
+
 module.exports = {
   AuthError,
   ensureAuthSchema,
@@ -1210,9 +1314,11 @@ module.exports = {
   registerWithPassword,
   resetPasswordWithEmailCode,
   requestEmailCode,
+  resetAdminManagedUserPassword,
   requireAdminAccess,
   requireAuthUser,
   requireSuperAdminAccess,
+  setAdminManagedUserStatus,
   setUserPassword,
   toPublicUser,
   updateAdminUser,

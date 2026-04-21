@@ -953,6 +953,85 @@ const updateAdminUser = (actor, userId, changes = {}) => {
   });
 };
 
+const assertAdminCanManageRegularUser = (actor, targetUser) => {
+  if (!hasAdminRole(actor?.role)) {
+    throw new AuthError("ADMIN_REQUIRED", "Administrator access is required");
+  }
+
+  const targetRole = normalizeRole(targetUser?.role, "user");
+  if (targetRole !== "user") {
+    throw new AuthError(
+      "ADMIN_TARGET_RESTRICTED",
+      "Administrators can only manage regular users",
+    );
+  }
+};
+
+const resetAdminManagedUserPassword = (actor, userId, nextPassword = "1234567890") => {
+  const targetUserId = String(userId || "").trim();
+  if (!targetUserId) {
+    throw new AuthError("USER_NOT_FOUND", "User does not exist");
+  }
+
+  const normalizedPassword = String(nextPassword || "").trim();
+  validatePassword(normalizedPassword);
+
+  return withStore((store) => {
+    const user = store.users[targetUserId];
+    if (!user) {
+      throw new AuthError("USER_NOT_FOUND", "User does not exist");
+    }
+
+    assertAdminCanManageRegularUser(actor, user);
+
+    user.passwordHash = hashPassword(normalizedPassword);
+    user.passwordUpdatedAt = new Date().toISOString();
+    user.updatedAt = user.passwordUpdatedAt;
+
+    Object.keys(store.sessions).forEach((token) => {
+      if (store.sessions[token]?.userId === targetUserId) {
+        delete store.sessions[token];
+      }
+    });
+
+    return toPublicUser(user);
+  });
+};
+
+const setAdminManagedUserStatus = (actor, userId, status) => {
+  const targetUserId = String(userId || "").trim();
+  if (!targetUserId) {
+    throw new AuthError("USER_NOT_FOUND", "User does not exist");
+  }
+
+  return withStore((store) => {
+    const user = store.users[targetUserId];
+    if (!user) {
+      throw new AuthError("USER_NOT_FOUND", "User does not exist");
+    }
+
+    assertAdminCanManageRegularUser(actor, user);
+
+    const nextStatus = normalizeStatus(status, normalizeStatus(user.status, "active"));
+    if (!["active", "disabled"].includes(nextStatus)) {
+      throw new AuthError("INVALID_USER_STATUS", "Unsupported user status");
+    }
+
+    user.status = nextStatus;
+    user.updatedAt = new Date().toISOString();
+
+    if (nextStatus !== "active") {
+      Object.keys(store.sessions).forEach((token) => {
+        if (store.sessions[token]?.userId === targetUserId) {
+          delete store.sessions[token];
+        }
+      });
+    }
+
+    return toPublicUser(user);
+  });
+};
+
 module.exports = {
   AuthError,
   getAdminAuthOverview,
@@ -968,9 +1047,11 @@ module.exports = {
   registerWithPassword,
   resetPasswordWithEmailCode,
   requestEmailCode,
+  resetAdminManagedUserPassword,
   requireAdminAccess,
   requireAuthUser,
   requireSuperAdminAccess,
+  setAdminManagedUserStatus,
   setUserPassword,
   toPublicUser,
   updateAdminUser,

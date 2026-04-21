@@ -12,6 +12,8 @@ import { AuthSessionPayload } from '../src/services/accountIdentity';
 import {
   fetchAdminUserDetail,
   fetchAdminUsers,
+  resetAdminUserPassword,
+  setAdminUserStatus,
   updateAdminUserProfile,
   type AdminUserDetailPayload,
   type AdminUserListPayload,
@@ -224,6 +226,77 @@ const UserAdminPanel: React.FC<UserAdminPanelProps> = ({ session }) => {
     }
   };
 
+  const syncUserInCatalog = useCallback((next: AdminUserDetailPayload) => {
+    setCatalog((prev) =>
+      prev
+        ? {
+            ...prev,
+            users: prev.users.map((item) =>
+              item.userId === next.user.userId
+                ? { ...item, ...next.user, account: next.account }
+                : item,
+            ),
+          }
+        : prev,
+    );
+  }, []);
+
+  const handleResetPassword = async () => {
+    if (!detail) return;
+    const confirmed = window.confirm(
+      `确认将该用户密码重置为 1234567890 吗？\n用户：${detail.user.email}`,
+    );
+    if (!confirmed) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      const next = await resetAdminUserPassword({
+        userId: detail.user.userId,
+        ledgerPage,
+        ledgerPageSize: 20,
+      });
+      setDetail(next);
+      syncEditor(next);
+      syncUserInCatalog(next);
+      toast.success('已重置密码为 1234567890');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleUserStatus = async () => {
+    if (!detail) return;
+    const nextStatus = detail.user.status === 'active' ? 'disabled' : 'active';
+    const confirmed = window.confirm(
+      nextStatus === 'disabled'
+        ? `确认停用该用户吗？\n用户：${detail.user.email}`
+        : `确认启用该用户吗？\n用户：${detail.user.email}`,
+    );
+    if (!confirmed) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      const next = await setAdminUserStatus({
+        userId: detail.user.userId,
+        status: nextStatus,
+        ledgerPage,
+        ledgerPageSize: 20,
+      });
+      setDetail(next);
+      syncEditor(next);
+      syncUserInCatalog(next);
+      toast.success(nextStatus === 'disabled' ? '用户已停用' : '用户已启用');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!isAdmin) {
     return null;
   }
@@ -384,6 +457,35 @@ const UserAdminPanel: React.FC<UserAdminPanelProps> = ({ session }) => {
             </div>
           ) : detail ? (
             <div className="space-y-4">
+              {isAdmin && detail.user.role === 'user' && (
+                <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
+                  <div className="mb-2 text-sm font-medium text-cyan-100">管理员快捷操作</div>
+                  <p className="mb-3 text-xs text-cyan-100/80">
+                    可对普通用户执行：重置密码为 1234567890、启用/停用账号。
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleResetPassword()}
+                      disabled={saving}
+                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-500/20 px-4 text-sm font-medium text-cyan-50 hover:bg-cyan-500/30 disabled:opacity-60"
+                    >
+                      {saving ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                      重置密码(1234567890)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleUserStatus()}
+                      disabled={saving}
+                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-500/20 px-4 text-sm font-medium text-amber-100 hover:bg-amber-500/30 disabled:opacity-60"
+                    >
+                      {saving ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                      {detail.user.status === 'active' ? '停用账号' : '启用账号'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
                   <div className="text-[11px] uppercase tracking-wider text-gray-500">当前用户</div>

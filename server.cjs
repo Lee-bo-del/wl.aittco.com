@@ -26,10 +26,12 @@ const {
   logoutSession,
   registerWithPassword,
   resetPasswordWithEmailCode,
+  resetAdminManagedUserPassword,
   requestEmailCode,
   requireAdminAccess,
   requireAuthUser,
   requireSuperAdminAccess,
+  setAdminManagedUserStatus,
   setUserPassword,
   updateAdminUser,
   verifyEmailCode,
@@ -2132,6 +2134,69 @@ app.patch("/api/admin/users/:userId", async (req, res) => {
     if (sendAuthError(res, error)) return;
     if (sendBillingError(res, error)) return;
     res.status(500).json({ error: error.message || "Failed to update user" });
+  }
+});
+
+app.post("/api/admin/users/:userId/reset-password", async (req, res) => {
+  try {
+    const actor = await requireAdminAccess(req, EMERGENCY_ADMIN_API_KEYS);
+    const userId = String(req.params.userId || "").trim();
+    const user = await resetAdminManagedUserPassword(actor, userId, "1234567890");
+
+    await logAdminCatalogChange(req, {
+      action: "admin.reset_user_password",
+      entityType: "user",
+      entityId: user.userId,
+      summary: `Reset password for ${user.email}`,
+      detail: {
+        targetUserId: user.userId,
+        targetEmail: user.email,
+        resetTo: "1234567890",
+      },
+    });
+
+    res.json(
+      await buildAdminUserDetailPayload(user, {
+        ledgerPage: parsePositivePage(req.query?.ledgerPage, 1),
+        ledgerPageSize: parsePositivePage(req.query?.ledgerPageSize, 20),
+      }),
+    );
+  } catch (error) {
+    if (sendAuthError(res, error)) return;
+    if (sendBillingError(res, error)) return;
+    res.status(500).json({ error: error.message || "Failed to reset password" });
+  }
+});
+
+app.post("/api/admin/users/:userId/status", async (req, res) => {
+  try {
+    const actor = await requireAdminAccess(req, EMERGENCY_ADMIN_API_KEYS);
+    const userId = String(req.params.userId || "").trim();
+    const nextStatus = String(req.body?.status || "").trim();
+    const user = await setAdminManagedUserStatus(actor, userId, nextStatus);
+
+    await logAdminCatalogChange(req, {
+      action: "admin.update_user_status",
+      entityType: "user",
+      entityId: user.userId,
+      summary: `${user.email} status changed to ${user.status}`,
+      detail: {
+        targetUserId: user.userId,
+        targetEmail: user.email,
+        status: user.status,
+      },
+    });
+
+    res.json(
+      await buildAdminUserDetailPayload(user, {
+        ledgerPage: parsePositivePage(req.query?.ledgerPage, 1),
+        ledgerPageSize: parsePositivePage(req.query?.ledgerPageSize, 20),
+      }),
+    );
+  } catch (error) {
+    if (sendAuthError(res, error)) return;
+    if (sendBillingError(res, error)) return;
+    res.status(500).json({ error: error.message || "Failed to update user status" });
   }
 });
 

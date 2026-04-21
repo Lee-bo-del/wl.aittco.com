@@ -138,3 +138,60 @@ export const updateAdminUserProfile = async ({
 
   return parseResponse<AdminUserDetailPayload>(response);
 };
+
+export const resetAdminUserPassword = async ({
+  userId,
+  ledgerPage = 1,
+  ledgerPageSize = 20,
+}: {
+  userId: string;
+  ledgerPage?: number;
+  ledgerPageSize?: number;
+}): Promise<AdminUserDetailPayload> => {
+  const params = new URLSearchParams();
+  params.set('ledgerPage', String(ledgerPage));
+  params.set('ledgerPageSize', String(ledgerPageSize));
+
+  const response = await fetch(
+    `${cleanUrl(API_BASE_URL)}/admin/users/${encodeURIComponent(userId)}/reset-password?${params.toString()}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await getAuthorizedBillingHeaders()),
+      },
+    },
+  );
+
+  return parseResponse<AdminUserDetailPayload>(response);
+};
+
+export const setAdminUserStatus = async ({
+  userId,
+  status,
+  ledgerPage = 1,
+  ledgerPageSize = 20,
+}: {
+  userId: string;
+  status: AuthUserProfile['status'];
+  ledgerPage?: number;
+  ledgerPageSize?: number;
+}): Promise<AdminUserDetailPayload> => {
+  const params = new URLSearchParams();
+  params.set('ledgerPage', String(ledgerPage));
+  params.set('ledgerPageSize', String(ledgerPageSize));
+
+  const response = await fetch(
+    `${cleanUrl(API_BASE_URL)}/admin/users/${encodeURIComponent(userId)}/status?${params.toString()}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await getAuthorizedBillingHeaders()),
+      },
+      body: JSON.stringify({ status }),
+    },
+  );
+
+  return parseResponse<AdminUserDetailPayload>(response);
+};
