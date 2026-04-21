@@ -573,7 +573,7 @@
     const badgeEl = document.getElementById("brandBadge4k");
 
     if (titleEl) {
-      titleEl.textContent = "武陵商贸";
+      titleEl.textContent = "武陵商厦";
     }
     if (subEl) {
       if (isSessionAuthenticated()) {
@@ -586,7 +586,7 @@
     }
     if (badgeEl) {
       badgeEl.style.display = "inline-flex";
-      badgeEl.textContent = "武陵商贸";
+      badgeEl.textContent = "武陵商厦";
     }
   };
   const updateLegacyAdminVisibility = () => {
