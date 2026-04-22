@@ -977,7 +977,8 @@ const collectResultUrls = (value, bucket = []) => {
     if (
       trimmed.startsWith("http://") ||
       trimmed.startsWith("https://") ||
-      trimmed.startsWith("data:")
+      trimmed.startsWith("data:") ||
+      trimmed.startsWith("/")
     ) {
       bucket.push(trimmed);
     }
