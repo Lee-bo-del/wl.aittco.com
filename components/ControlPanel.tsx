@@ -1353,9 +1353,18 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
               const res = await fetch(imgRef.src);
               blob = await res.blob();
             }
-            // Priority 4: HTTP/HTTPS URL (external images)
-            else if (imgRef.src.startsWith('http')) {
-              const response = await fetch(imgRef.src);
+            // Priority 4: HTTP/HTTPS URL (external images) or site-relative URLs
+            else if (
+              imgRef.src.startsWith('http') ||
+              imgRef.src.startsWith('//') ||
+              imgRef.src.startsWith('/')
+            ) {
+              const requestUrl = imgRef.src.startsWith('/')
+                ? new URL(imgRef.src, window.location.origin).toString()
+                : imgRef.src.startsWith('//')
+                  ? `${window.location.protocol}${imgRef.src}`
+                  : imgRef.src;
+              const response = await fetch(requestUrl);
               if (!response.ok) {
                 throw new Error(`Failed to fetch: ${response.status}`);
               }
@@ -1430,8 +1439,16 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
             }
 
           } catch (error) {
-            console.error('Failed to process reference image:', error);
-            throw new Error(`参考图处理失败: ${error instanceof Error ? error.message : '未知错误'}`);
+            console.warn('Failed to process reference image, fallback to raw src:', error);
+            const fallbackSrc = String(imgRef.src || '').trim();
+            if (fallbackSrc) {
+              const normalizedFallback = fallbackSrc.startsWith('/')
+                ? new URL(fallbackSrc, window.location.origin).toString()
+                : fallbackSrc.startsWith('//')
+                  ? `${window.location.protocol}${fallbackSrc}`
+                  : fallbackSrc;
+              base64Images.push(normalizedFallback);
+            }
           }
         }
       }

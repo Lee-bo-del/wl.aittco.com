@@ -10,13 +10,13 @@ import {
   getDefaultVideoDurationForModel,
   getVideoModelAspectRatioOptions,
   getVideoModelById,
-  getVideoModelDisplayCost,
   getVideoModelDurationOptions,
   getVideoModelOptions,
   getVideoModelSupportsHd,
 } from '../src/config/videoModels';
 import {
   canUseDirectUserApiKeyForVideoModel,
+  getSelectedVideoRoute,
   getVideoRouteOptions,
   getVideoRoutesByRouteFamily,
 } from '../src/config/videoRoutes';
@@ -111,7 +111,7 @@ export const VideoFormConfig: React.FC<VideoFormConfigProps> = ({
   const modelOptions = visibleVideoModels.map((model) => ({
     value: model.id,
     label: model.label,
-    cost: getVideoModelDisplayCost(model.id),
+    cost: getSelectedVideoRoute(model.id).pointCost || 0,
     icon: model.id.startsWith('grok') ? <Sparkles size={14} /> : <GoogleLogo />,
   }));
 
