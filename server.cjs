@@ -993,11 +993,14 @@ const collectResultUrls = (value, bucket = []) => {
 
   [
     "url",
+    "uri",
     "output",
     "image_url",
     "imageUrl",
     "video_url",
     "videoUrl",
+    "fileUri",
+    "file_uri",
     "src",
   ].forEach((key) => {
     if (value[key]) {

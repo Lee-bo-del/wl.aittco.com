@@ -12,6 +12,54 @@ const buildOptionalSessionHeaders = (): Record<string, string> => {
   return sessionToken ? buildBillingIdentityHeaders(sessionToken) : {};
 };
 
+const extractVideoOutputUrl = (payload: any): string => {
+  if (!payload || typeof payload !== 'object') return '';
+  const direct =
+    payload.video_url ||
+    payload.image_url ||
+    payload.url ||
+    payload.uri ||
+    payload.fileUri ||
+    payload.file_uri ||
+    payload.data?.output;
+  if (typeof direct === 'string' && direct.trim()) {
+    return direct.trim();
+  }
+
+  const candidateParts = payload?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(candidateParts)) {
+    for (const part of candidateParts) {
+      const fileUri =
+        part?.fileData?.fileUri ||
+        part?.fileData?.file_uri ||
+        part?.file_data?.file_uri ||
+        part?.file_data?.fileUri;
+      if (typeof fileUri === 'string' && fileUri.trim()) {
+        return fileUri.trim();
+      }
+    }
+  }
+
+  const listCandidates = [
+    payload?.results,
+    payload?.data?.results,
+    payload?.response?.results,
+    payload?.output,
+  ];
+  for (const list of listCandidates) {
+    if (Array.isArray(list)) {
+      const first = list[0];
+      const url =
+        first?.url || first?.uri || first?.fileUri || first?.file_uri || first?.video_url;
+      if (typeof url === 'string' && url.trim()) {
+        return url.trim();
+      }
+    }
+  }
+
+  return '';
+};
+
 // Extracted polling function for reuse in recovery
 export const pollVideoTask = async (
   apiKey: string,
@@ -48,16 +96,7 @@ export const pollVideoTask = async (
           task?.data?.status ||
           ''
         ).toLowerCase();
-        const outputUrl =
-          task.image_url ||
-          task.video_url ||
-          task.url ||
-          task.data?.output ||
-          task?.results?.[0]?.url ||
-          task?.data?.results?.[0]?.url ||
-          task?.response?.results?.[0]?.url ||
-          task?.candidates?.[0]?.content?.parts?.find?.((part: any) => part?.fileData?.fileUri)
-            ?.fileData?.fileUri;
+        const outputUrl = extractVideoOutputUrl(task);
         const failReason =
           task.fail_reason ||
           task.error ||
@@ -216,14 +255,7 @@ export const generateVideo = async (
       },
     });
 
-    const immediateOutputUrl =
-      response?.data?.video_url ||
-      response?.data?.image_url ||
-      response?.data?.url ||
-      response?.data?.data?.output ||
-      response?.data?.results?.[0]?.url ||
-      response?.data?.candidates?.[0]?.content?.parts?.find?.((part: any) => part?.fileData?.fileUri)
-        ?.fileData?.fileUri;
+    const immediateOutputUrl = extractVideoOutputUrl(response?.data);
     if (immediateOutputUrl) {
       return immediateOutputUrl;
     }
@@ -234,7 +266,8 @@ export const generateVideo = async (
       response?.data?.data?.task_id ||
       response?.data?.name ||
       response?.data?.operation?.name ||
-      response?.data?.data?.name;
+      response?.data?.data?.name ||
+      response?.data?.responseId;
 
     if (!taskId) {
       throw new Error('未返回任务ID');
