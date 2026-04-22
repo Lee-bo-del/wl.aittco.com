@@ -1037,19 +1037,11 @@ const RESULT_URL_FIELD_KEYS = new Set([
   "file_uri",
   "src",
 ]);
-const getRequestProtocol = (req) => {
-  const forwardedProto = String(req?.headers?.["x-forwarded-proto"] || "")
-    .split(",")[0]
-    .trim()
-    .toLowerCase();
-  if (forwardedProto) return forwardedProto;
-  return String(req?.protocol || "http").trim().toLowerCase();
-};
 const buildProxyMediaUrlForRequest = (req, mediaType, rawUrl) => {
   const input = String(rawUrl || "").trim();
   if (!input) return input;
-  const requestProtocol = getRequestProtocol(req);
-  if (requestProtocol !== "https") return input;
+  if (/^\/api\/proxy\//i.test(input)) return input;
+  if (/^https:\/\//i.test(input)) return input;
   if (!/^http:\/\//i.test(input)) return input;
   const targetMediaType = String(mediaType || "image").trim().toLowerCase();
   return `/api/proxy/${targetMediaType}?url=${encodeURIComponent(input)}`;
