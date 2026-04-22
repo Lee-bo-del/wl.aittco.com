@@ -18,6 +18,13 @@ const {
 
 const LEDGER_LIMIT = 5000;
 const SETTLED_TASK_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const PENDING_TASK_TIMEOUT_MS =
+  Math.max(
+    5,
+    Number.parseInt(String(process.env.PENDING_TASK_TIMEOUT_MINUTES || "30"), 10) || 30,
+  ) *
+  60 *
+  1000;
 
 class BillingError extends Error {
   constructor(code, message, extra = {}) {
@@ -174,6 +181,47 @@ const ensureBillingSchema = async () => {
 const cleanupBillingArtifacts = async (executor = null) => {
   await ensureBillingSchema();
   const db = executor || (await getPool());
+  const stalePendingCutoff = toDbDateTime(new Date(Date.now() - PENDING_TASK_TIMEOUT_MS));
+  const [staleTasks] = await db.execute(
+    `
+      SELECT *
+      FROM billing_pending_tasks
+      WHERE settled_at IS NULL
+        AND UPPER(COALESCE(status, 'PENDING')) = 'PENDING'
+        AND created_at < ?
+      ORDER BY created_at ASC
+      LIMIT 200
+    `,
+    [stalePendingCutoff],
+  );
+
+  for (const task of staleTasks || []) {
+    const nowDb = toDbDateTime();
+    const refund = await refundChargeInTx(db, task.account_id, task.charge_id, {
+      reason: "task_timeout_auto_refund",
+      taskId: task.task_id,
+      routeId: task.route_id,
+      action: task.action_name,
+    });
+    await db.execute(
+      `
+        UPDATE billing_pending_tasks
+        SET status = 'FAILED',
+            settled_at = ?,
+            refund_id = ?,
+            refunded_at = ?
+        WHERE task_id = ?
+          AND settled_at IS NULL
+      `,
+      [
+        nowDb,
+        refund?.refundId || null,
+        refund?.account?.updatedAt ? toDbDateTime(refund.account.updatedAt) : null,
+        task.task_id,
+      ],
+    );
+  }
+
   const cutoff = toDbDateTime(new Date(Date.now() - SETTLED_TASK_RETENTION_MS));
   await db.execute(
     "DELETE FROM billing_pending_tasks WHERE settled_at IS NOT NULL AND settled_at < ?",

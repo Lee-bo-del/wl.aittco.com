@@ -14,6 +14,13 @@ const BILLING_FILE = path.join(__dirname, "billing-data.json");
 const BILLING_VERSION = 1;
 const LEDGER_LIMIT = 5000;
 const SETTLED_TASK_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const PENDING_TASK_TIMEOUT_MS =
+  Math.max(
+    5,
+    Number.parseInt(String(process.env.PENDING_TASK_TIMEOUT_MINUTES || "30"), 10) || 30,
+  ) *
+  60 *
+  1000;
 
 class BillingError extends Error {
   constructor(code, message, extra = {}) {
@@ -110,6 +117,25 @@ const cleanupStore = (store) => {
   }
 
   const now = Date.now();
+  Object.entries(store.pendingTasks || {}).forEach(([taskId, task]) => {
+    if (!task) return;
+    const isPending = String(task.status || "").toUpperCase() === "PENDING" && !task.settledAt;
+    const createdAtMs = Date.parse(String(task.createdAt || ""));
+    if (!isPending || !Number.isFinite(createdAtMs)) return;
+    if (now - createdAtMs < PENDING_TASK_TIMEOUT_MS) return;
+
+    const refund = refundChargeInStore(store, task.accountId, task.chargeId, {
+      reason: "task_timeout_auto_refund",
+      taskId,
+      routeId: task.routeId,
+      action: task.action,
+    });
+    task.status = "FAILED";
+    task.settledAt = new Date().toISOString();
+    task.refundId = refund?.refundId || null;
+    task.refundedAt = refund?.account?.updatedAt || null;
+  });
+
   Object.keys(store.pendingTasks).forEach((taskId) => {
     const task = store.pendingTasks[taskId];
     if (!task) return;

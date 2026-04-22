@@ -531,6 +531,51 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
     });
   };
 
+  const compressReferenceForUpload = async (src: string): Promise<string> => {
+    const MAX_SIDE = 1600;
+    const JPEG_QUALITY = 0.82;
+
+    try {
+      const sourceDataUrl = src.startsWith('data:') ? src : await getBase64FromUrl(src);
+      if (!sourceDataUrl.startsWith('data:image/')) return sourceDataUrl;
+
+      const blob = await fetch(sourceDataUrl).then((response) => response.blob());
+      if (!blob.type.startsWith('image/')) return sourceDataUrl;
+
+      const objectUrl = URL.createObjectURL(blob);
+      try {
+        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = () => reject(new Error('Failed to decode image'));
+          el.src = objectUrl;
+        });
+
+        let width = image.width;
+        let height = image.height;
+        const longSide = Math.max(width, height);
+        if (longSide > MAX_SIDE) {
+          const scale = MAX_SIDE / longSide;
+          width = Math.max(1, Math.round(width * scale));
+          height = Math.max(1, Math.round(height * scale));
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return sourceDataUrl;
+        ctx.drawImage(image, 0, 0, width, height);
+        return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    } catch (error) {
+      console.warn('Failed to compress reference image, fallback to original source', error);
+      return src;
+    }
+  };
+
   const handleRefDragStart = (e: React.DragEvent, index: number) => {
     setDraggingIndex(index);
     e.dataTransfer.setData('application/x-sort-index', index.toString());
@@ -969,8 +1014,10 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
             const parts: any[] = [{ text: currentPrompt }];
             
             if (effectiveReferenceImages.length > 0) {
-              const srcs = effectiveReferenceImages.map(r => r.src);
-              for (const src of srcs) {
+              const optimizedReferenceSources = await Promise.all(
+                effectiveReferenceImages.map((ref) => compressReferenceForUpload(ref.src)),
+              );
+              for (const src of optimizedReferenceSources) {
                 // Get clean base64 data (without prefix)
                 let base64Data = '';
                 let mimeType = 'image/jpeg';
@@ -1146,28 +1193,24 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
         };
 
 	        if (isDoubao) {
-	          // Doubao models support multi-image array natively
-	          const imageArray = refSrcs.map(src => src.includes(',') ? src.split(',')[1] : src);
+	          // Doubao models support multi-image array natively.
+            const compressedRefDataUrls = await Promise.all(
+              effectiveReferenceImages.map((ref) => compressReferenceForUpload(ref.src)),
+            );
+	          const imageArray = compressedRefDataUrls
+              .map(src => (src.includes(',') ? src.split(',')[1] : src))
+              .filter((item): item is string => Boolean(item));
+            if (imageArray.length === 0) {
+              setError('参考图处理失败，请重新上传后再试');
+              return;
+            }
 	          processSubmission({ image: imageArray });
           } else if (isGrok) {
             // Grok 图生图必须传可读图片数据，避免 blob/url 导致参考图失效。
             const base64Results = await Promise.all(
               effectiveReferenceImages.map(async (ref) => {
                 try {
-                  let dataUrl = '';
-                  if (ref.blob) {
-                    dataUrl = await new Promise<string>((resolve, reject) => {
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        if (typeof reader.result === 'string') resolve(reader.result);
-                        else reject(new Error('Failed to read blob as data URL'));
-                      };
-                      reader.onerror = () => reject(reader.error || new Error('FileReader error'));
-                      reader.readAsDataURL(ref.blob as Blob);
-                    });
-                  } else {
-                    dataUrl = await getBase64FromUrl(ref.src);
-                  }
+                  const dataUrl = await compressReferenceForUpload(ref.src);
                   // Keep data-url form; payload builder will derive raw base64 too.
                   return dataUrl;
                 } catch (error) {

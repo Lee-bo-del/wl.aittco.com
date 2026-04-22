@@ -1609,7 +1609,7 @@ const announcementLimiter = rateLimit({
 app.use("/api", globalLimiter);
 
 app.use(cors());
-app.use(express.json({ limit: "50mb" })); // Support large Base64 request payloads.
+app.use(express.json({ limit: "20mb" })); // Guard against oversized Base64 payloads causing OOM.
 app.use(async (req, _res, next) => {
   try {
     req.authUser = await getSessionUserFromRequest(req);
