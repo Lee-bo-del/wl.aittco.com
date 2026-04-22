@@ -2,7 +2,7 @@ import videoRouteCatalog from '../../config/videoRoutes.json';
 import { getVideoModelById } from './videoModels';
 import { roundNonNegativePoint } from '../utils/pointFormat';
 
-export type VideoRouteTransport = 'openai-video';
+export type VideoRouteTransport = 'openai-video' | 'gemini-native';
 export type VideoRouteMode = 'async';
 
 export interface VideoRouteConfig {

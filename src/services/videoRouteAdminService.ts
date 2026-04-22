@@ -30,7 +30,7 @@ export interface AdminVideoRoutePayload {
   description?: string;
   routeFamily: string;
   line: string;
-  transport: 'openai-video';
+  transport: 'openai-video' | 'gemini-native';
   mode: 'async';
   baseUrl: string;
   generatePath: string;
