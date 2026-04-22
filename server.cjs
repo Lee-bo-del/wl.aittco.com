@@ -374,6 +374,94 @@ const ensureDataUriImage = (value) => {
   const mimeType = guessDataUriMimeType(compact);
   return `data:${mimeType};base64,${compact}`;
 };
+const toGeminiPartFromImage = (value) => {
+  if (typeof value !== "string") return null;
+  const normalized = ensureDataUriImage(value);
+  if (typeof normalized !== "string") return null;
+  const trimmed = normalized.trim();
+  if (!trimmed) return null;
+
+  if (/^data:image\//i.test(trimmed)) {
+    const match = trimmed.match(/^data:(image\/[^;]+);base64,(.+)$/i);
+    if (match) {
+      return {
+        inlineData: {
+          mimeType: match[1],
+          data: match[2],
+        },
+      };
+    }
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return {
+      fileData: {
+        mimeType: "image/jpeg",
+        fileUri: trimmed,
+      },
+    };
+  }
+
+  const compact = trimmed.replace(/\s+/g, "");
+  if (looksLikeBase64Image(compact)) {
+    return {
+      inlineData: {
+        mimeType: guessDataUriMimeType(compact),
+        data: compact,
+      },
+    };
+  }
+
+  return null;
+};
+const buildGeminiNativeVideoBody = (requestBody = {}) => {
+  const prompt = String(requestBody?.prompt || "").trim();
+  const parts = [];
+  if (prompt) {
+    parts.push({ text: prompt });
+  }
+
+  const appended = new Set();
+  const appendImage = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => appendImage(item));
+      return;
+    }
+    const part = toGeminiPartFromImage(value);
+    if (!part) return;
+    const fingerprint = JSON.stringify(part);
+    if (appended.has(fingerprint)) return;
+    appended.add(fingerprint);
+    parts.push(part);
+  };
+
+  appendImage(requestBody.image);
+  appendImage(requestBody.last_frame);
+  appendImage(requestBody.images);
+
+  if (parts.length === 0) {
+    parts.push({ text: prompt || "Generate video" });
+  }
+
+  const aspectRatio =
+    requestBody.aspect_ratio ||
+    requestBody.ratio ||
+    requestBody.input_config?.aspect_ratio ||
+    "16:9";
+
+  const body = {
+    contents: [{ parts }],
+    generationConfig: {
+      responseModalities: ["VIDEO", "TEXT"],
+    },
+  };
+
+  if (aspectRatio) {
+    body.generationConfig.aspectRatio = String(aspectRatio);
+  }
+
+  return body;
+};
 const applyVisionaryImageCompat = (requestBody = {}) => {
   const normalizeArray = (value) => {
     if (Array.isArray(value)) {
@@ -3797,20 +3885,32 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
       },
     });
 
+    const isGeminiVideoRoute =
+      route?.transport === "gemini-native" || isGeminiNativeStylePath(route);
+    const upstreamModelName = getRouteModelName(
+      route,
+      requestBody,
+      requestBody.model || "veo_3_1_i2v_s_fast_ultra_fl",
+    );
+    const generateEndpoint = isGeminiVideoRoute
+      ? buildRouteUrl(route, route.generatePath || "/v1beta/models/{model}:generateContent", {
+          model: upstreamModelName,
+        })
+      : buildRouteUrl(route, route.generatePath || "/v2/videos/generations");
+    const finalUpstreamBody = isGeminiVideoRoute
+      ? buildGeminiNativeVideoBody({ ...requestBody, model: upstreamModelName })
+      : upstreamBody;
+
     const response = await requestWithRetry(
       () =>
-        axios.post(
-          buildRouteUrl(route, route.generatePath || "/v2/videos/generations"),
-          upstreamBody,
-          {
-            headers: {
-              Authorization: userKey,
-              "Content-Type": "application/json",
-            },
-            timeout: 900000, // 900 seconds (15 minutes)
-            httpsAgent: SHARED_HTTPS_AGENT,
+        axios.post(generateEndpoint, finalUpstreamBody, {
+          headers: {
+            Authorization: userKey,
+            "Content-Type": "application/json",
           },
-        ),
+          timeout: 900000, // 900 seconds (15 minutes)
+          httpsAgent: SHARED_HTTPS_AGENT,
+        }),
       { retries: 1, delayMs: 700, label: `video-generate-${route.id}` },
     );
 
@@ -3818,7 +3918,10 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
     const upstreamTaskId =
       response.data?.id ||
       response.data?.task_id ||
-      response.data?.data?.task_id;
+      response.data?.data?.task_id ||
+      response.data?.name ||
+      response.data?.operation?.name ||
+      response.data?.data?.name;
 
     if (upstreamTaskId) {
       const localTaskId = buildVideoTaskToken(route.id, upstreamTaskId);
@@ -3844,7 +3947,9 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
     await completeGenerationRecordSuccessSafe({
       recordId: generationRecord?.id,
       resultUrls: extractResultUrlsFromPayload(response.data),
-      outputSize: upstreamBody.resolution || (requestBody.hd ? "1080P" : "720P"),
+      outputSize:
+        (isGeminiVideoRoute ? null : upstreamBody.resolution) ||
+        (requestBody.hd ? "1080P" : "720P"),
       aspectRatio: requestBody.aspect_ratio || upstreamBody.ratio || null,
       meta: {
         transport: route.transport,
@@ -3860,6 +3965,12 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
       errorMessage: error.message,
     });
     console.error("[Video Generate] Error:", error.message);
+    if (error.response?.data) {
+      console.error(
+        "[Video Generate] Upstream response:",
+        JSON.stringify(error.response.data),
+      );
+    }
     respondWithUserFacingGenerationError(res, error, 500);
   }
 });

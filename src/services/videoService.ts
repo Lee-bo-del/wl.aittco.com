@@ -48,7 +48,16 @@ export const pollVideoTask = async (
           task?.data?.status ||
           ''
         ).toLowerCase();
-        const outputUrl = task.image_url || task.video_url || task.url || task.data?.output;
+        const outputUrl =
+          task.image_url ||
+          task.video_url ||
+          task.url ||
+          task.data?.output ||
+          task?.results?.[0]?.url ||
+          task?.data?.results?.[0]?.url ||
+          task?.response?.results?.[0]?.url ||
+          task?.candidates?.[0]?.content?.parts?.find?.((part: any) => part?.fileData?.fileUri)
+            ?.fileData?.fileUri;
         const failReason =
           task.fail_reason ||
           task.error ||
@@ -207,7 +216,25 @@ export const generateVideo = async (
       },
     });
 
-    const taskId = response?.data?.id || response?.data?.task_id || response?.data?.data?.task_id;
+    const immediateOutputUrl =
+      response?.data?.video_url ||
+      response?.data?.image_url ||
+      response?.data?.url ||
+      response?.data?.data?.output ||
+      response?.data?.results?.[0]?.url ||
+      response?.data?.candidates?.[0]?.content?.parts?.find?.((part: any) => part?.fileData?.fileUri)
+        ?.fileData?.fileUri;
+    if (immediateOutputUrl) {
+      return immediateOutputUrl;
+    }
+
+    const taskId =
+      response?.data?.id ||
+      response?.data?.task_id ||
+      response?.data?.data?.task_id ||
+      response?.data?.name ||
+      response?.data?.operation?.name ||
+      response?.data?.data?.name;
 
     if (!taskId) {
       throw new Error('未返回任务ID');
