@@ -89,7 +89,11 @@ export const useCanvasOperations = () => {
         }
         const link = document.createElement('a');
         link.href = href;
-        const isVideo = node.type === 'VIDEO' || node.src.toLowerCase().endsWith('.mp4') || node.src.toLowerCase().includes('format=mp4');
+        const isVideo =
+          node.type === 'VIDEO' ||
+          node.src.toLowerCase().endsWith('.mp4') ||
+          node.src.toLowerCase().includes('format=mp4') ||
+          node.src.toLowerCase().includes('/api/proxy/video?');
         const ext = isVideo ? 'mp4' : 'png';
         const filename = (node.prompt ? node.prompt.slice(0, 20).replace(/[^a-z0-9]/gi, '_').trim() : (isVideo ? 'video' : 'image')) + `_${node.id}.${ext}`;
         link.download = filename;
@@ -98,7 +102,10 @@ export const useCanvasOperations = () => {
       } catch (err) {
         console.error("Failed to download asset", err);
         const link = document.createElement('a'); link.href = node.src; link.target = "_blank"; 
-        const isVideo = node.type === 'VIDEO' || node.src.toLowerCase().endsWith('.mp4');
+        const isVideo =
+          node.type === 'VIDEO' ||
+          node.src.toLowerCase().endsWith('.mp4') ||
+          node.src.toLowerCase().includes('/api/proxy/video?');
         link.download = `asset_${node.id}.${isVideo ? 'mp4' : 'png'}`; 
         link.click();
       }

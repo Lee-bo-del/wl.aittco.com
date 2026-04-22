@@ -18,6 +18,20 @@ const USER_FACING_GENERATION_ERROR_MESSAGE =
 
 const cleanUrl = (url: string) => url.replace(/\/$/, '');
 const sanitizeHeader = (value: string) => value.replace(/[^\x00-\x7F]/g, '').trim();
+const normalizeVideoResultUrl = (value: string) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\/api\/proxy\/video\?/i.test(raw)) return raw;
+  if (/^https:\/\//i.test(raw)) return raw;
+  if (
+    typeof window !== 'undefined' &&
+    window.location.protocol === 'https:' &&
+    /^http:\/\//i.test(raw)
+  ) {
+    return `/api/proxy/video?url=${encodeURIComponent(raw)}`;
+  }
+  return raw;
+};
 
 const buildAuthHeaders = (apiKey?: string | null): Record<string, string> => {
   const trimmed = String(apiKey || '').trim();
@@ -115,19 +129,43 @@ export function findAllUrlsInObject(obj: any, results: string[] = []) {
     typeof obj.output === 'string' &&
     (obj.output.startsWith('http') || obj.output.startsWith('data:'))
   ) {
-    results.push(obj.output);
+    results.push(normalizeVideoResultUrl(obj.output));
   } else if (
     obj.url &&
     typeof obj.url === 'string' &&
     (obj.url.startsWith('http') || obj.url.startsWith('data:'))
   ) {
-    results.push(obj.url);
+    results.push(normalizeVideoResultUrl(obj.url));
   } else if (
     obj.image_url &&
     typeof obj.image_url === 'string' &&
     (obj.image_url.startsWith('http') || obj.image_url.startsWith('data:'))
   ) {
-    results.push(obj.image_url);
+    results.push(normalizeVideoResultUrl(obj.image_url));
+  } else if (
+    obj.video_url &&
+    typeof obj.video_url === 'string' &&
+    (obj.video_url.startsWith('http') || obj.video_url.startsWith('data:') || obj.video_url.startsWith('/'))
+  ) {
+    results.push(normalizeVideoResultUrl(obj.video_url));
+  } else if (
+    obj.fileUri &&
+    typeof obj.fileUri === 'string' &&
+    (obj.fileUri.startsWith('http') || obj.fileUri.startsWith('data:') || obj.fileUri.startsWith('/'))
+  ) {
+    results.push(normalizeVideoResultUrl(obj.fileUri));
+  } else if (
+    obj.file_uri &&
+    typeof obj.file_uri === 'string' &&
+    (obj.file_uri.startsWith('http') || obj.file_uri.startsWith('data:') || obj.file_uri.startsWith('/'))
+  ) {
+    results.push(normalizeVideoResultUrl(obj.file_uri));
+  } else if (
+    obj.uri &&
+    typeof obj.uri === 'string' &&
+    (obj.uri.startsWith('http') || obj.uri.startsWith('data:') || obj.uri.startsWith('/'))
+  ) {
+    results.push(normalizeVideoResultUrl(obj.uri));
   }
 
   Object.keys(obj).forEach((key) => {

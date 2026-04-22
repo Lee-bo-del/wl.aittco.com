@@ -3644,25 +3644,60 @@ app.get("/api/proxy/video", async (req, res) => {
 
   try {
     console.log("[Video Proxy] Fetching:", videoUrl.substring(0, 120) + "...");
+    const requestHeaders = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    };
+    if (req.headers.range) {
+      requestHeaders.Range = String(req.headers.range);
+    }
+
     const response = await requestWithRetry(
       () =>
         axios.get(videoUrl, {
-          responseType: "arraybuffer",
+          responseType: "stream",
           timeout: 120000,
           httpsAgent: SHARED_HTTPS_AGENT,
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-          },
+          headers: requestHeaders,
+          validateStatus: (status) => status >= 200 && status < 400,
         }),
       { retries: 1, delayMs: 500, label: "video-proxy" },
     );
 
-    const contentType = response.headers["content-type"] || "video/mp4";
-    res.setHeader("Content-Type", contentType);
-    res.setHeader("Accept-Ranges", "bytes");
+    const passthroughHeaders = [
+      "content-type",
+      "content-length",
+      "content-range",
+      "accept-ranges",
+      "cache-control",
+      "last-modified",
+      "etag",
+    ];
+    passthroughHeaders.forEach((headerName) => {
+      const headerValue = response.headers[headerName];
+      if (headerValue) {
+        res.setHeader(headerName, headerValue);
+      }
+    });
+    res.setHeader(
+      "Content-Type",
+      response.headers["content-type"] || "video/mp4",
+    );
+    res.setHeader(
+      "Accept-Ranges",
+      response.headers["accept-ranges"] || "bytes",
+    );
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.send(Buffer.from(response.data));
+    res.status(response.status || 200);
+    response.data.on("error", (streamError) => {
+      console.error("[Video Proxy] Stream Error:", streamError.message);
+      if (!res.headersSent) {
+        res.status(500).end("Video proxy stream failed");
+      } else {
+        res.end();
+      }
+    });
+    response.data.pipe(res);
   } catch (error) {
     console.error("[Video Proxy] Error:", error.message);
     res.status(500).send("Failed to proxy video: " + error.message);

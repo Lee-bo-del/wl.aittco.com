@@ -12,6 +12,34 @@ const buildOptionalSessionHeaders = (): Record<string, string> => {
   return sessionToken ? buildBillingIdentityHeaders(sessionToken) : {};
 };
 
+export const normalizeVideoDeliveryUrl = (value: string): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\/api\/proxy\/video\?/i.test(raw)) return raw;
+  if (/^https:\/\//i.test(raw)) return raw;
+  if (
+    typeof window !== 'undefined' &&
+    window.location.protocol === 'https:' &&
+    /^http:\/\//i.test(raw)
+  ) {
+    return `/api/proxy/video?url=${encodeURIComponent(raw)}`;
+  }
+  return raw;
+};
+
+export const looksLikeVideoUrl = (value: string): boolean => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return false;
+  return (
+    raw.endsWith('.mp4') ||
+    raw.includes('format=mp4') ||
+    raw.includes('/video/') ||
+    raw.includes('/api/proxy/video?') ||
+    raw.includes('mime=video') ||
+    raw.includes('video/mp4')
+  );
+};
+
 const extractVideoOutputUrl = (payload: any): string => {
   if (!payload || typeof payload !== 'object') return '';
   const direct =
@@ -23,7 +51,7 @@ const extractVideoOutputUrl = (payload: any): string => {
     payload.file_uri ||
     payload.data?.output;
   if (typeof direct === 'string' && direct.trim()) {
-    return direct.trim();
+    return normalizeVideoDeliveryUrl(direct.trim());
   }
 
   const candidateParts = payload?.candidates?.[0]?.content?.parts;
@@ -35,7 +63,7 @@ const extractVideoOutputUrl = (payload: any): string => {
         part?.file_data?.file_uri ||
         part?.file_data?.fileUri;
       if (typeof fileUri === 'string' && fileUri.trim()) {
-        return fileUri.trim();
+        return normalizeVideoDeliveryUrl(fileUri.trim());
       }
     }
   }
@@ -52,7 +80,7 @@ const extractVideoOutputUrl = (payload: any): string => {
       const url =
         first?.url || first?.uri || first?.fileUri || first?.file_uri || first?.video_url;
       if (typeof url === 'string' && url.trim()) {
-        return url.trim();
+        return normalizeVideoDeliveryUrl(url.trim());
       }
     }
   }

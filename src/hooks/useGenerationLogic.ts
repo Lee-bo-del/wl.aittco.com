@@ -4,6 +4,7 @@ import { useSelectionStore } from '../store/selectionStore';
 import { useHistoryStore } from '../store/historyStore';
 import { assetStorage } from '../services/assetStorage';
 import { arrangeNodes } from '../utils/layout';
+import { looksLikeVideoUrl, normalizeVideoDeliveryUrl } from '../services/videoService';
 import { NodeData, ToolMode } from '../../types';
 
 type AutoDownloadItem = {
@@ -219,9 +220,7 @@ export const useGenerationLogic = () => {
         const currentNodes0 = useCanvasStore.getState().nodes;
         const currentNode0 = currentNodes0.find(n => n.id === id);
         const rawSrc = src;
-        const isVideo = rawSrc.toLowerCase().endsWith('.mp4') 
-            || rawSrc.toLowerCase().includes('format=mp4')
-            || rawSrc.toLowerCase().includes('/video/')
+        const isVideo = looksLikeVideoUrl(rawSrc)
             || currentNode0?.type === 'VIDEO';
 
         const currentNodes = useCanvasStore.getState().nodes;
@@ -230,7 +229,7 @@ export const useGenerationLogic = () => {
 
         // 1) Show result immediately with original URL first.
         // Avoid blocking first paint on local proxy latency.
-        const displaySrc = rawSrc;
+        const displaySrc = isVideo ? normalizeVideoDeliveryUrl(rawSrc) : rawSrc;
 
         updateNode(id, {
             src: displaySrc,

@@ -5,6 +5,7 @@ import InstructionsModal from '../../components/InstructionsModal';
 import ContextMenu from '../../components/ContextMenu';
 import AnnouncementPopup from '../../components/AnnouncementPopup';
 import { X } from 'lucide-react';
+import { looksLikeVideoUrl, normalizeVideoDeliveryUrl } from '../services/videoService';
 
 interface ModalsContainerProps {
   settingsOpen: boolean;
@@ -87,9 +88,9 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = ({
         <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-8" onClick={onCloseLightbox}>
           <button onClick={onCloseLightbox} className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-white/10 rounded-full"><X size={24} /></button>
           
-          {(lightboxImage.toLowerCase().endsWith('.mp4') || lightboxImage.toLowerCase().includes('format=mp4')) ? (
+          {looksLikeVideoUrl(lightboxImage) ? (
              <video 
-               src={lightboxImage} 
+               src={normalizeVideoDeliveryUrl(lightboxImage)} 
                className="max-w-full max-h-full object-contain shadow-2xl rounded-sm"
                controls
                autoPlay
