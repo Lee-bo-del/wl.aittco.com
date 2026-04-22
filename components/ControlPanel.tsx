@@ -1359,16 +1359,14 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
               imgRef.src.startsWith('//') ||
               imgRef.src.startsWith('/')
             ) {
-              const requestUrl = imgRef.src.startsWith('/')
+              const directUrl = imgRef.src.startsWith('/')
                 ? new URL(imgRef.src, window.location.origin).toString()
                 : imgRef.src.startsWith('//')
                   ? `${window.location.protocol}${imgRef.src}`
                   : imgRef.src;
-              const response = await fetch(requestUrl);
-              if (!response.ok) {
-                throw new Error(`Failed to fetch: ${response.status}`);
-              }
-              blob = await response.blob();
+              // For remotely-accessible URLs, pass through directly to avoid oversized base64 payload.
+              base64Images.push(directUrl);
+              continue;
             }
             // Priority 5: Blob URL (local preview images)
             else if (imgRef.src.startsWith('blob:')) {
