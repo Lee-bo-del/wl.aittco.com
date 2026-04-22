@@ -4,6 +4,7 @@ import Konva from 'konva';
 import useImage from 'use-image';
 import { NodeData, Point, Stroke, ToolMode } from '../types';
 import { useCanvasStore } from '../src/store/canvasStore';
+import { normalizeVideoDeliveryUrl } from '../src/services/videoService';
 
 interface CanvasNodeProps {
   node: NodeData;
@@ -222,44 +223,101 @@ const VideoNode: React.FC<{ node: NodeData; progress: number; statusText: string
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageRef = useRef<Konva.Image>(null);
+  const loadedSrcRef = useRef('');
+  const latestWidthRef = useRef(node.width);
+  const latestHeightRef = useRef(node.height);
+  const latestNodeIdRef = useRef(node.id);
   const [videoImage, setVideoImage] = useState<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  const [videoError, setVideoError] = useState('');
   const updateNode = useCanvasStore((state) => state.updateNode);
+
+  useEffect(() => {
+    latestWidthRef.current = node.width;
+    latestHeightRef.current = node.height;
+    latestNodeIdRef.current = node.id;
+  }, [node.width, node.height, node.id]);
 
   useEffect(() => {
     if (!node.src || node.type !== 'VIDEO') return;
 
+    const normalizedSrc = normalizeVideoDeliveryUrl(node.src);
+    const expectedSrc =
+      typeof window !== 'undefined'
+        ? new URL(normalizedSrc, window.location.origin).toString()
+        : normalizedSrc;
+
     if (!videoRef.current) {
       const vid = document.createElement('video');
-      vid.src = node.src;
       vid.crossOrigin = 'anonymous';
       vid.loop = true;
       vid.muted = true;
+      vid.preload = 'auto';
+      vid.playsInline = true;
+
+      const markReady = () => {
+        setVideoImage(vid);
+        setIsVideoReady(true);
+        setVideoError('');
+        imageRef.current?.getLayer()?.batchDraw();
+      };
 
       vid.onloadedmetadata = () => {
         const videoWidth = vid.videoWidth;
         const videoHeight = vid.videoHeight;
         if (videoWidth && videoHeight) {
-          const newHeight = node.width * (videoHeight / videoWidth);
-          if (Math.abs(newHeight - node.height) > 1) {
-            updateNode(node.id, { height: newHeight });
+          const targetWidth = latestWidthRef.current;
+          const currentHeight = latestHeightRef.current;
+          const newHeight = targetWidth * (videoHeight / videoWidth);
+          if (Math.abs(newHeight - currentHeight) > 1) {
+            updateNode(latestNodeIdRef.current, { height: newHeight });
           }
         }
-        vid.currentTime = 0.1;
+        markReady();
+      };
+
+      vid.onloadeddata = () => {
+        markReady();
+        try {
+          if (vid.currentTime < 0.01) {
+            vid.currentTime = 0.01;
+          }
+        } catch {
+          // Some browsers reject tiny seeks before full readiness; still usable.
+        }
+      };
+
+      vid.onseeked = () => {
+        markReady();
+      };
+
+      vid.oncanplay = markReady;
+      vid.oncanplaythrough = markReady;
+      vid.onerror = () => {
+        setVideoError('Video failed to load');
+        setIsVideoReady(false);
       };
 
       videoRef.current = vid;
-      setVideoImage(vid);
-    } else if (videoRef.current.src !== node.src) {
-      videoRef.current.src = node.src;
+    }
+
+    const currentSrc = videoRef.current.currentSrc || videoRef.current.src || '';
+    if (loadedSrcRef.current !== expectedSrc || currentSrc !== expectedSrc) {
+      loadedSrcRef.current = expectedSrc;
+      setVideoImage(null);
       setIsPlaying(false);
+      setIsVideoReady(false);
+      setVideoError('');
+      videoRef.current.src = normalizedSrc;
+      videoRef.current.load();
     }
 
     return () => {
       if (videoRef.current) videoRef.current.pause();
     };
-  }, [node.src, node.width, node.height, node.id, node.type, updateNode]);
+  }, [node.src, node.type, updateNode]);
 
   useEffect(() => {
     const vid = videoRef.current;
@@ -294,8 +352,11 @@ const VideoNode: React.FC<{ node: NodeData; progress: number; statusText: string
   if (node.error) {
     return <ErrorPlaceholder width={node.width} height={node.height} message={node.errorMessage || 'Failed'} />;
   }
-  if (!videoImage) {
-    return <Rect width={node.width} height={node.height} fill="#000" cornerRadius={30} />;
+  if (videoError) {
+    return <ErrorPlaceholder width={node.width} height={node.height} message={videoError} />;
+  }
+  if (!videoImage || !isVideoReady) {
+    return <DownloadingPlaceholder width={node.width} height={node.height} />;
   }
 
   return (
