@@ -1304,10 +1304,6 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
       setError("请输入提示词");
       return;
     }
-    if (!apiKey) {
-      setError("请先设置 API 密钥");
-      return;
-    }
 
     const parsedPromptResult = parsePromptReferenceTags(prompt, referenceImages.length);
     if (parsedPromptResult.error) {
