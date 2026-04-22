@@ -687,6 +687,79 @@ const settlePendingTask = (taskId, status) =>
     return task;
   });
 
+const scanAndCompensateAbnormalOrders = ({
+  pendingTimeoutMinutes = Number.parseInt(String(process.env.PENDING_TASK_TIMEOUT_MINUTES || "30"), 10) || 30,
+  limit = 500,
+} = {}) =>
+  withStore((store) => {
+    const safeTimeoutMinutes = Math.max(5, Number.parseInt(String(pendingTimeoutMinutes || 30), 10) || 30);
+    const safeLimit = Math.min(2000, Math.max(1, Number.parseInt(String(limit || 500), 10) || 500));
+    const cutoffMs = Date.now() - safeTimeoutMinutes * 60 * 1000;
+
+    const candidates = Object.entries(store.pendingTasks || {})
+      .map(([taskId, task]) => ({ taskId, task }))
+      .filter(({ task }) => {
+        if (!task) return false;
+        const status = String(task.status || "").toUpperCase();
+        const createdAtMs = Date.parse(String(task.createdAt || ""));
+        const isTimedOutPending =
+          status === "PENDING" &&
+          !task.settledAt &&
+          Number.isFinite(createdAtMs) &&
+          createdAtMs < cutoffMs;
+        const isFailedMissingRefund =
+          status === "FAILED" &&
+          task.chargeId &&
+          !task.refundId;
+        return isTimedOutPending || isFailedMissingRefund;
+      })
+      .sort((a, b) => {
+        const left = Date.parse(String(a.task?.createdAt || "")) || 0;
+        const right = Date.parse(String(b.task?.createdAt || "")) || 0;
+        return left - right;
+      })
+      .slice(0, safeLimit);
+
+    let scanned = 0;
+    let compensated = 0;
+    let alreadySettled = 0;
+    const refundedTaskIds = [];
+    const failedTaskIds = [];
+
+    for (const { taskId, task } of candidates) {
+      scanned += 1;
+      const refund = refundChargeInStore(store, task.accountId, task.chargeId, {
+        reason: "manual_compensation_scan",
+        taskId,
+        routeId: task.routeId,
+        action: task.action,
+      });
+
+      if (!refund) {
+        alreadySettled += 1;
+      } else {
+        compensated += 1;
+        refundedTaskIds.push(taskId);
+      }
+
+      task.status = "FAILED";
+      task.settledAt = task.settledAt || new Date().toISOString();
+      if (refund?.refundId) task.refundId = refund.refundId;
+      if (refund?.account?.updatedAt) task.refundedAt = refund.account.updatedAt;
+      failedTaskIds.push(taskId);
+    }
+
+    return {
+      success: true,
+      scanned,
+      compensated,
+      alreadySettled,
+      pendingTimeoutMinutes: safeTimeoutMinutes,
+      refundedTaskIds,
+      failedTaskIds,
+    };
+  });
+
 const rechargeAccount = (accountId, points, note = "") =>
   withStore((store) => {
     const account = store.accounts[accountId];
@@ -927,6 +1000,7 @@ module.exports = {
   reservePoints,
   refundPoints,
   registerPendingTask,
+  scanAndCompensateAbnormalOrders,
   settlePendingTask,
   rechargeAccount,
   adjustAccountPoints,

@@ -121,6 +121,16 @@ export interface RedeemCodeListPayload {
   codes: RedeemCodeRecord[];
 }
 
+export interface CompensationScanPayload {
+  success: boolean;
+  scanned: number;
+  compensated: number;
+  alreadySettled: number;
+  pendingTimeoutMinutes: number;
+  refundedTaskIds: string[];
+  failedTaskIds: string[];
+}
+
 const parseResponse = async <T>(response: Response): Promise<T> => {
   const data = (await response.json().catch(() => ({}))) as T & {
     error?: string;
@@ -335,4 +345,28 @@ export const fetchBillingRedeemCodes = async ({
   );
 
   return parseResponse<RedeemCodeListPayload>(response);
+};
+
+export const runBillingCompensationScan = async ({
+  pendingTimeoutMinutes = 30,
+  limit = 500,
+}: {
+  pendingTimeoutMinutes?: number;
+  limit?: number;
+} = {}): Promise<CompensationScanPayload> => {
+  await ensureBillingIdentity();
+
+  const response = await fetch(`${cleanUrl(API_BASE_URL)}/admin/billing/compensation-scan`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(await getAuthorizedBillingHeaders()),
+    },
+    body: JSON.stringify({
+      pendingTimeoutMinutes,
+      limit,
+    }),
+  });
+
+  return parseResponse<CompensationScanPayload>(response);
 };

@@ -999,6 +999,89 @@ const settlePendingTask = async (taskId, status) => {
   });
 };
 
+const scanAndCompensateAbnormalOrders = async ({
+  pendingTimeoutMinutes = Number.parseInt(String(process.env.PENDING_TASK_TIMEOUT_MINUTES || "30"), 10) || 30,
+  limit = 500,
+} = {}) => {
+  await ensureBillingSchema();
+
+  const safeTimeoutMinutes = Math.max(5, Number.parseInt(String(pendingTimeoutMinutes || 30), 10) || 30);
+  const safeLimit = Math.min(2000, Math.max(1, Number.parseInt(String(limit || 500), 10) || 500));
+
+  return withTransaction(async (connection) => {
+    await cleanupBillingArtifacts(connection);
+
+    const staleCutoff = toDbDateTime(new Date(Date.now() - safeTimeoutMinutes * 60 * 1000));
+    const [tasks] = await connection.execute(
+      `
+        SELECT *
+        FROM billing_pending_tasks
+        WHERE (
+          (settled_at IS NULL AND UPPER(COALESCE(status, 'PENDING')) = 'PENDING' AND created_at < ?)
+          OR
+          (UPPER(COALESCE(status, '')) = 'FAILED' AND charge_id IS NOT NULL AND (refund_id IS NULL OR refund_id = ''))
+        )
+        ORDER BY created_at ASC
+        LIMIT ?
+        FOR UPDATE
+      `,
+      [staleCutoff, safeLimit],
+    );
+
+    let scanned = 0;
+    let compensated = 0;
+    let alreadySettled = 0;
+    const refundedTaskIds = [];
+    const failedTaskIds = [];
+
+    for (const task of tasks || []) {
+      scanned += 1;
+
+      const refund = await refundChargeInTx(connection, task.account_id, task.charge_id, {
+        reason: "manual_compensation_scan",
+        taskId: task.task_id,
+        routeId: task.route_id,
+        action: task.action_name,
+      });
+      if (!refund) {
+        alreadySettled += 1;
+      } else {
+        compensated += 1;
+        refundedTaskIds.push(String(task.task_id));
+      }
+
+      const nowDb = toDbDateTime();
+      await connection.execute(
+        `
+          UPDATE billing_pending_tasks
+          SET status = 'FAILED',
+              settled_at = COALESCE(settled_at, ?),
+              refund_id = COALESCE(refund_id, ?),
+              refunded_at = COALESCE(refunded_at, ?)
+          WHERE task_id = ?
+        `,
+        [
+          nowDb,
+          refund?.refundId || null,
+          refund?.account?.updatedAt ? toDbDateTime(refund.account.updatedAt) : null,
+          task.task_id,
+        ],
+      );
+      failedTaskIds.push(String(task.task_id));
+    }
+
+    return {
+      success: true,
+      scanned,
+      compensated,
+      alreadySettled,
+      pendingTimeoutMinutes: safeTimeoutMinutes,
+      refundedTaskIds,
+      failedTaskIds,
+    };
+  });
+};
+
 const rechargeAccount = async (accountId, points, note = "") => {
   await ensureBillingSchema();
   return withTransaction(async (connection) => {
@@ -1394,6 +1477,7 @@ module.exports = {
   reservePoints,
   refundPoints,
   registerPendingTask,
+  scanAndCompensateAbnormalOrders,
   settlePendingTask,
   rechargeAccount,
   adjustAccountPoints,

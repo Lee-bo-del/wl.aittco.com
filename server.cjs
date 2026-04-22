@@ -55,6 +55,7 @@ const {
   redeemCode,
   refundPoints,
   registerPendingTask,
+  scanAndCompensateAbnormalOrders,
   settlePendingTask,
   rechargeAccount,
 } = require("./billingStore.cjs");
@@ -2075,6 +2076,39 @@ app.post("/api/admin/redeem-codes", async (req, res) => {
     if (sendAuthError(res, error)) return;
     if (sendBillingError(res, error)) return;
     res.status(500).json({ error: error.message || "Failed to create redeem codes" });
+  }
+});
+
+app.post("/api/admin/billing/compensation-scan", async (req, res) => {
+  try {
+    await requireSuperAdminAccess(req);
+    const pendingTimeoutMinutes = Number.parseInt(
+      String(req.body?.pendingTimeoutMinutes || process.env.PENDING_TASK_TIMEOUT_MINUTES || "30"),
+      10,
+    );
+    const limit = Number.parseInt(String(req.body?.limit || 500), 10);
+
+    const result = await scanAndCompensateAbnormalOrders({
+      pendingTimeoutMinutes,
+      limit,
+    });
+
+    await logAdminCatalogChange(req, {
+      action: "billing.compensation_scan",
+      entityType: "billing_pending_tasks",
+      entityId: "manual_scan",
+      summary: `Compensation scan: refunded ${result.compensated} / scanned ${result.scanned}`,
+      detail: result,
+    });
+
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    if (sendAuthError(res, error)) return;
+    if (sendBillingError(res, error)) return;
+    res.status(500).json({ error: error.message || "Failed to run compensation scan" });
   }
 });
 
