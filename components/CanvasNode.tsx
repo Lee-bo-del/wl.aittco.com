@@ -224,6 +224,7 @@ const VideoNode: React.FC<{ node: NodeData; progress: number; statusText: string
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageRef = useRef<Konva.Image>(null);
   const loadedSrcRef = useRef('');
+  const objectUrlRef = useRef('');
   const latestWidthRef = useRef(node.width);
   const latestHeightRef = useRef(node.height);
   const latestNodeIdRef = useRef(node.id);
@@ -232,6 +233,7 @@ const VideoNode: React.FC<{ node: NodeData; progress: number; statusText: string
   const [isMuted, setIsMuted] = useState(true);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoError, setVideoError] = useState('');
+  const hasResolvedVideoSrc = Boolean(String(node.src || '').trim());
   const updateNode = useCanvasStore((state) => state.updateNode);
 
   useEffect(() => {
@@ -296,6 +298,13 @@ const VideoNode: React.FC<{ node: NodeData; progress: number; statusText: string
       vid.oncanplay = markReady;
       vid.oncanplaythrough = markReady;
       vid.onerror = () => {
+        console.error('[Canvas VideoNode] failed to load video', {
+          nodeId: latestNodeIdRef.current,
+          requestedSrc: normalizedSrc,
+          currentSrc: vid.currentSrc || vid.src,
+          mediaErrorCode: vid.error?.code,
+          mediaErrorMessage: vid.error?.message,
+        });
         setVideoError('Video failed to load');
         setIsVideoReady(false);
       };
@@ -310,14 +319,66 @@ const VideoNode: React.FC<{ node: NodeData; progress: number; statusText: string
       setIsPlaying(false);
       setIsVideoReady(false);
       setVideoError('');
-      videoRef.current.src = normalizedSrc;
-      videoRef.current.load();
+
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = '';
+      }
+
+      let cancelled = false;
+
+      const loadVideo = async () => {
+        try {
+          const response = await fetch(normalizedSrc);
+          if (!response.ok) {
+            throw new Error(`Fetch failed: ${response.status}`);
+          }
+          const blob = await response.blob();
+          if (!blob || blob.size === 0) {
+            throw new Error('Empty video blob');
+          }
+
+          const blobUrl = URL.createObjectURL(blob);
+          if (cancelled) {
+            URL.revokeObjectURL(blobUrl);
+            return;
+          }
+
+          objectUrlRef.current = blobUrl;
+          videoRef.current!.src = blobUrl;
+          videoRef.current!.load();
+        } catch (error: any) {
+          console.error('[Canvas VideoNode] video fetch failed, fallback to direct src', {
+            nodeId: latestNodeIdRef.current,
+            requestedSrc: normalizedSrc,
+            message: error?.message || String(error),
+          });
+          if (cancelled) return;
+          videoRef.current!.src = normalizedSrc;
+          videoRef.current!.load();
+        }
+      };
+
+      void loadVideo();
+
+      return () => {
+        cancelled = true;
+      };
     }
 
     return () => {
       if (videoRef.current) videoRef.current.pause();
     };
   }, [node.src, node.type, updateNode]);
+
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = '';
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const vid = videoRef.current;
@@ -349,7 +410,7 @@ const VideoNode: React.FC<{ node: NodeData; progress: number; statusText: string
   if (node.loading) {
     return <DreamingPlaceholder width={node.width} height={node.height} progress={progress} statusText={statusText || 'Generating video...'} />;
   }
-  if (node.error) {
+  if (node.error && !hasResolvedVideoSrc) {
     return <ErrorPlaceholder width={node.width} height={node.height} message={node.errorMessage || 'Failed'} />;
   }
   if (videoError) {

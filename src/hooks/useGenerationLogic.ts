@@ -205,12 +205,27 @@ export const useGenerationLogic = () => {
     // Update generation
     const handleUpdateGeneration = useCallback(async (id: string, src: string | null, error?: string, taskId?: string) => {
         if (taskId) {
-            updateNode(id, { taskId, loading: true, error: false }, true);
+            updateNode(
+              id,
+              {
+                taskId,
+                loading: true,
+                error: false,
+                errorMessage: undefined,
+                progress: 0,
+              },
+              true,
+            );
             return;
         }
 
         if (error || !src || typeof src !== 'string') {
-        updateNode(id, { loading: false, error: true, errorMessage: error || 'Invalid image source' });
+        updateNode(id, {
+          loading: false,
+          error: true,
+          errorMessage: error || 'Invalid image source',
+          progress: 0,
+        });
         return;
         }
 
@@ -235,6 +250,9 @@ export const useGenerationLogic = () => {
             src: displaySrc,
             loading: false,
             error: false,
+            errorMessage: undefined,
+            taskId: undefined,
+            progress: 100,
             opacity: 1
         }, true);
 
