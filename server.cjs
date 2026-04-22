@@ -3918,6 +3918,32 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
     );
 
     console.log("[Video Generate] Upstream response:", response.data);
+    const immediateResultUrls = extractResultUrlsFromPayload(response.data);
+    if (immediateResultUrls.length > 0) {
+      await completeGenerationRecordSuccessSafe({
+        recordId: generationRecord?.id,
+        resultUrls: immediateResultUrls,
+        outputSize:
+          (isGeminiVideoRoute ? null : upstreamBody.resolution) ||
+          (requestBody.hd ? "1080P" : "720P"),
+        aspectRatio: requestBody.aspect_ratio || upstreamBody.ratio || null,
+        meta: {
+          transport: route.transport,
+          routeMode: route.mode,
+          duration: requestBody.duration || null,
+          source: "video_generate_immediate",
+        },
+      });
+
+      const immediateUrl = immediateResultUrls[0];
+      return res.json({
+        ...response.data,
+        status: response.data?.status || "succeeded",
+        url: response.data?.url || immediateUrl,
+        video_url: response.data?.video_url || immediateUrl,
+      });
+    }
+
     const upstreamTaskId =
       response.data?.id ||
       response.data?.task_id ||
