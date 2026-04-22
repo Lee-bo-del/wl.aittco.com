@@ -1025,6 +1025,53 @@ const extractResultStatus = (payload) =>
   )
     .trim()
     .toUpperCase();
+const RESULT_URL_FIELD_KEYS = new Set([
+  "url",
+  "uri",
+  "output",
+  "image_url",
+  "imageUrl",
+  "video_url",
+  "videoUrl",
+  "fileUri",
+  "file_uri",
+  "src",
+]);
+const getRequestProtocol = (req) => {
+  const forwardedProto = String(req?.headers?.["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  if (forwardedProto) return forwardedProto;
+  return String(req?.protocol || "http").trim().toLowerCase();
+};
+const buildProxyMediaUrlForRequest = (req, mediaType, rawUrl) => {
+  const input = String(rawUrl || "").trim();
+  if (!input) return input;
+  const requestProtocol = getRequestProtocol(req);
+  if (requestProtocol !== "https") return input;
+  if (!/^http:\/\//i.test(input)) return input;
+  const targetMediaType = String(mediaType || "image").trim().toLowerCase();
+  return `/api/proxy/${targetMediaType}?url=${encodeURIComponent(input)}`;
+};
+const mapResultUrlsInPayload = (payload, mapper) => {
+  if (typeof payload === "string") return payload;
+  if (Array.isArray(payload)) {
+    return payload.map((item) => mapResultUrlsInPayload(item, mapper));
+  }
+  if (!payload || typeof payload !== "object") return payload;
+
+  const mapped = {};
+  Object.keys(payload).forEach((key) => {
+    const value = payload[key];
+    if (RESULT_URL_FIELD_KEYS.has(key) && typeof value === "string") {
+      mapped[key] = mapper(value);
+    } else {
+      mapped[key] = mapResultUrlsInPayload(value, mapper);
+    }
+  });
+  return mapped;
+};
 const buildGenerationRecordPayload = async ({
   req,
   billingAccount = null,
@@ -3596,6 +3643,40 @@ app.get("/api/proxy/image", async (req, res) => {
   }
 });
 
+app.get("/api/proxy/video", async (req, res) => {
+  const videoUrl = String(req.query.url || "").trim();
+  if (!videoUrl) return res.status(400).send("Url is required");
+  if (!videoUrl.startsWith("http")) {
+    return res.status(400).send("Invalid URL protocol");
+  }
+
+  try {
+    console.log("[Video Proxy] Fetching:", videoUrl.substring(0, 120) + "...");
+    const response = await requestWithRetry(
+      () =>
+        axios.get(videoUrl, {
+          responseType: "arraybuffer",
+          timeout: 120000,
+          httpsAgent: SHARED_HTTPS_AGENT,
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+          },
+        }),
+      { retries: 1, delayMs: 500, label: "video-proxy" },
+    );
+
+    const contentType = response.headers["content-type"] || "video/mp4";
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.send(Buffer.from(response.data));
+  } catch (error) {
+    console.error("[Video Proxy] Error:", error.message);
+    res.status(500).send("Failed to proxy video: " + error.message);
+  }
+});
+
 // ==================== Image Task Polling ====================
 app.get("/api/task/:taskId", pollingLimiter, async (req, res) => {
   try {
@@ -3918,7 +3999,10 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
     );
 
     console.log("[Video Generate] Upstream response:", response.data);
-    const immediateResultUrls = extractResultUrlsFromPayload(response.data);
+    const proxiedResponseData = mapResultUrlsInPayload(response.data, (value) =>
+      buildProxyMediaUrlForRequest(req, "video", value),
+    );
+    const immediateResultUrls = extractResultUrlsFromPayload(proxiedResponseData);
     if (immediateResultUrls.length > 0) {
       await completeGenerationRecordSuccessSafe({
         recordId: generationRecord?.id,
@@ -3937,20 +4021,20 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
 
       const immediateUrl = immediateResultUrls[0];
       return res.json({
-        ...response.data,
-        status: response.data?.status || "succeeded",
-        url: response.data?.url || immediateUrl,
-        video_url: response.data?.video_url || immediateUrl,
+        ...proxiedResponseData,
+        status: proxiedResponseData?.status || "succeeded",
+        url: proxiedResponseData?.url || immediateUrl,
+        video_url: proxiedResponseData?.video_url || immediateUrl,
       });
     }
 
     const upstreamTaskId =
-      response.data?.id ||
-      response.data?.task_id ||
-      response.data?.data?.task_id ||
-      response.data?.name ||
-      response.data?.operation?.name ||
-      response.data?.data?.name;
+      proxiedResponseData?.id ||
+      proxiedResponseData?.task_id ||
+      proxiedResponseData?.data?.task_id ||
+      proxiedResponseData?.name ||
+      proxiedResponseData?.operation?.name ||
+      proxiedResponseData?.data?.name;
 
     if (upstreamTaskId) {
       const localTaskId = buildVideoTaskToken(route.id, upstreamTaskId);
@@ -4058,11 +4142,14 @@ app.get("/api/video/task/:taskId", pollingLimiter, async (req, res) => {
       JSON.stringify(response.data).substring(0, 500),
     );
 
-    const taskStatus = extractResultStatus(response.data);
+    const proxiedResponseData = mapResultUrlsInPayload(response.data, (value) =>
+      buildProxyMediaUrlForRequest(req, "video", value),
+    );
+    const taskStatus = extractResultStatus(proxiedResponseData);
     if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
       await completeGenerationRecordSuccessSafe({
         taskId: encodedTaskId,
-        resultUrls: extractResultUrlsFromPayload(response.data),
+        resultUrls: extractResultUrlsFromPayload(proxiedResponseData),
         meta: {
           polledAt: new Date().toISOString(),
           source: "video_task_poll",
@@ -4072,9 +4159,9 @@ app.get("/api/video/task/:taskId", pollingLimiter, async (req, res) => {
       await completeGenerationRecordFailureSafe({
         taskId: encodedTaskId,
         errorMessage:
-          response.data?.error ||
-          response.data?.message ||
-          response.data?.fail_reason ||
+          proxiedResponseData?.error ||
+          proxiedResponseData?.message ||
+          proxiedResponseData?.fail_reason ||
           "Video task failed",
         meta: {
           polledAt: new Date().toISOString(),
@@ -4083,7 +4170,7 @@ app.get("/api/video/task/:taskId", pollingLimiter, async (req, res) => {
       });
     }
 
-    res.json(response.data);
+    res.json(proxiedResponseData);
   } catch (error) {
     console.error("[Video Task Poll] Error:", error.message);
     respondWithUserFacingGenerationError(res, error, 500);
