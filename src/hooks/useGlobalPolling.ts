@@ -33,7 +33,6 @@ export const useGlobalPolling = (
       queryKey: ['task', node.taskId],
       queryFn: async () => {
         if (!node.taskId) return null;
-        if (node.type === 'VIDEO' && !apiKey) return null;
 
         const data =
           node.type === 'VIDEO'
@@ -82,7 +81,7 @@ export const useGlobalPolling = (
         return 5000;
       },
       retry: 3,
-      enabled: !!node.taskId && (node.type === 'IMAGE' || !!apiKey),
+      enabled: !!node.taskId,
     })),
   });
 
@@ -138,3 +137,4 @@ export const useGlobalPolling = (
     toastError,
   ]);
 };
+

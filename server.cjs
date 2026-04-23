@@ -2903,6 +2903,50 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
   let localTaskId = null;
   let chargeRouteId = null;
   let generationRecord = null;
+  let clientConnectionClosed = false;
+  let refundedForDisconnectedClient = false;
+  const markClientDisconnected = () => {
+    if (!res.writableEnded) {
+      clientConnectionClosed = true;
+    }
+  };
+  req.on("aborted", markClientDisconnected);
+  req.on("close", markClientDisconnected);
+
+  const maybeRefundForDisconnectedClient = async () => {
+    if (refundedForDisconnectedClient) return;
+    if (!billingAccount?.accountId || !billingCharge?.chargeId) return;
+    refundedForDisconnectedClient = true;
+    try {
+      if (localTaskId) {
+        await settlePendingTask(localTaskId, "FAILED");
+      } else {
+        await refundPoints(billingAccount.accountId, billingCharge.chargeId, {
+          reason: "client_disconnected",
+          routeId: chargeRouteId,
+        });
+      }
+    } catch (refundError) {
+      console.warn(
+        "[Generate] Failed to rollback billing after client disconnect:",
+        refundError?.message || refundError,
+      );
+    }
+  };
+
+  const sendSuccessResponse = async (payload) => {
+    if (
+      clientConnectionClosed ||
+      req.aborted ||
+      res.writableEnded ||
+      res.destroyed
+    ) {
+      await maybeRefundForDisconnectedClient();
+      return false;
+    }
+    res.json(payload);
+    return true;
+  };
   try {
     const fallbackAuthorization = req.headers["authorization"];
     const requestBody = { ...(req.body || {}) };
@@ -2981,7 +3025,7 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
             routeMode: route.mode,
           },
         });
-        return res.json(
+        const payload =
           shouldUseBilling
             ? {
                 ...result,
@@ -2990,8 +3034,9 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
                   remainingPoints: billingCharge.account.points,
                 },
               }
-            : result,
-        );
+            : result;
+        if (!(await sendSuccessResponse(payload))) return;
+        return;
       } catch (error) {
         if (shouldUseBilling && billingCharge?.chargeId) {
           await refundPoints(billingAccount.accountId, billingCharge.chargeId, {
@@ -3268,7 +3313,7 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
         },
       });
       if (urlMatch) {
-        return res.json(
+        const payload =
           shouldUseBilling
             ? {
                 url: syncResultUrl,
@@ -3277,10 +3322,11 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
                   remainingPoints: billingCharge?.account?.points,
                 },
               }
-            : { url: urlMatch[0] },
-        );
+            : { url: urlMatch[0] };
+        if (!(await sendSuccessResponse(payload))) return;
+        return;
       }
-      return res.json(
+      const payload =
         shouldUseBilling
           ? {
               url: syncResultUrl,
@@ -3289,8 +3335,9 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
                 remainingPoints: billingCharge?.account?.points,
               },
             }
-          : { url: chatContent },
-      );
+          : { url: chatContent };
+      if (!(await sendSuccessResponse(payload))) return;
+      return;
     }
 
     console.log("[Generate] Upstream response:", response.data);
@@ -3332,7 +3379,7 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
           settled: "immediate_result",
         },
       });
-      return res.json(
+      const payload =
         shouldUseBilling
           ? {
               ...immediatePayload,
@@ -3341,8 +3388,9 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
                 remainingPoints: billingCharge?.account?.points,
               },
             }
-          : immediatePayload,
-      );
+          : immediatePayload;
+      if (!(await sendSuccessResponse(payload))) return;
+      return;
     }
 
     const upstreamTaskId =
@@ -3387,7 +3435,8 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
         };
       }
 
-      return res.json(normalizedResponse);
+      if (!(await sendSuccessResponse(normalizedResponse))) return;
+      return;
     }
 
     await completeGenerationRecordSuccessSafe({
@@ -3401,7 +3450,7 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
       },
     });
 
-    res.json(
+    const payload =
       shouldUseBilling
         ? {
             ...response.data,
@@ -3410,8 +3459,8 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
               remainingPoints: billingCharge?.account?.points,
             },
           }
-        : response.data,
-    );
+        : response.data;
+    if (!(await sendSuccessResponse(payload))) return;
   } catch (error) {
     if (billingCharge?.chargeId && billingAccount?.accountId && !localTaskId) {
       await refundPoints(billingAccount.accountId, billingCharge.chargeId, {

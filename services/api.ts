@@ -199,6 +199,15 @@ export const generateImageApi = async (
     return { taskId: '', url: resJson.url || resJson.image_url };
   }
 
+  if (Array.isArray(resJson.results) && resJson.results.length > 0) {
+    const urls = resJson.results
+      .map((item: any) => String(item?.url || item?.image_url || '').trim())
+      .filter((item: string) => Boolean(item));
+    if (urls.length > 0) {
+      return { taskId: '', images: urls, ...resJson };
+    }
+  }
+
   if (Array.isArray(resJson.images) && resJson.images.length > 0) {
     return { taskId: '', images: resJson.images, ...resJson };
   }
@@ -320,3 +329,4 @@ export const generateGeminiImage = async (
 
   return response.json();
 };
+

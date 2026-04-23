@@ -985,6 +985,8 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
             .then((res: any) => {
                if (res.taskId) {
                  onUpdateGeneration(pid, null, undefined, res.taskId);
+               } else if (Array.isArray(res.images) && res.images.length > 0) {
+                 onUpdateGeneration(pid, res.images[0]);
                } else if (res.data && res.data[0] && res.data[0].url) {
                  onUpdateGeneration(pid, res.data[0].url);
                } else if (res.url) {
@@ -1162,6 +1164,12 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
               .then((res: any) => {
                 if (res.taskId) {
                   placeholderIds.forEach(pid => onUpdateGeneration(pid, null, undefined, res.taskId));
+                } else if (Array.isArray(res.images) && res.images.length > 0) {
+                  placeholderIds.forEach((pid, idx) => {
+                    const item = res.images[idx] || res.images[0];
+                    if (item) onUpdateGeneration(pid, item);
+                    else onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE);
+                  });
                 } else if (res.data && Array.isArray(res.data) && res.data.length > 0) {
                   if (isGrok && placeholderIds.length === 1 && res.data.length > 1) {
                     const item = res.data[res.data.length - 1];
@@ -1266,6 +1274,12 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ onInitGeneration
             .then((res: any) => {
               if (res.taskId) {
                 placeholderIds.forEach(pid => onUpdateGeneration(pid, null, undefined, res.taskId));
+              } else if (Array.isArray(res.images) && res.images.length > 0) {
+                placeholderIds.forEach((pid, idx) => {
+                  const item = res.images[idx] || res.images[0];
+                  if (item) onUpdateGeneration(pid, item);
+                  else onUpdateGeneration(pid, null, USER_FACING_GENERATION_ERROR_MESSAGE);
+                });
               } else if (res.data && Array.isArray(res.data) && res.data.length > 0) {
                 if (isGrokModel && placeholderIds.length === 1 && res.data.length > 1) {
                   const item = res.data[res.data.length - 1];
