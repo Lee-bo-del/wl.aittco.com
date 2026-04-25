@@ -5,6 +5,13 @@ const API_BASE_URL =
 
 const cleanUrl = (url: string) => url.replace(/\/$/, '');
 const STORAGE_KEY = 'auth-session-v1';
+const LEGACY_STORAGE_KEYS = [
+  'auth-session',
+  'auth-session-token',
+  'authSession',
+  'sessionToken',
+  'x-auth-session',
+];
 export const AUTH_SESSION_CHANGE_EVENT = 'auth-session-change';
 
 export type AuthUserRole = 'user' | 'admin' | 'super_admin';
@@ -48,6 +55,9 @@ export interface RegistrationStatusPayload {
 const canUseStorage = () =>
   typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 
+const canUseSessionStorage = () =>
+  typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
+
 const emitAuthSessionChange = () => {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new Event(AUTH_SESSION_CHANGE_EVENT));
@@ -68,7 +78,31 @@ const parseResponse = async <T>(response: Response): Promise<T> => {
 export const getStoredAuthSessionToken = (): string | null => {
   if (!canUseStorage()) return null;
   const raw = window.localStorage.getItem(STORAGE_KEY);
-  return raw && raw.trim() ? raw.trim() : null;
+  if (raw && raw.trim()) return raw.trim();
+
+  // Backward compatibility: auto-migrate legacy session key names.
+  for (const key of LEGACY_STORAGE_KEYS) {
+    const legacyValue = window.localStorage.getItem(key);
+    if (legacyValue && legacyValue.trim()) {
+      const normalized = legacyValue.trim();
+      window.localStorage.setItem(STORAGE_KEY, normalized);
+      return normalized;
+    }
+  }
+
+  // Additional fallback: some historical builds used sessionStorage.
+  if (canUseSessionStorage()) {
+    for (const key of [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]) {
+      const sessionValue = window.sessionStorage.getItem(key);
+      if (sessionValue && sessionValue.trim()) {
+        const normalized = sessionValue.trim();
+        window.localStorage.setItem(STORAGE_KEY, normalized);
+        return normalized;
+      }
+    }
+  }
+
+  return null;
 };
 
 export const setStoredAuthSessionToken = (sessionToken: string) => {
