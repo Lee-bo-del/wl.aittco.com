@@ -40,7 +40,10 @@ import {
   getVideoModelOptions,
   getVideoModelReferenceLabels,
 } from '../src/config/videoModels';
-import { getSelectedVideoRoute, getVideoModelNameForRoute } from '../src/config/videoRoutes';
+import {
+  getSelectedVideoRoute,
+  getVideoModelNameForRoute,
+} from '../src/config/videoRoutes';
 import { useVideoModelCatalog } from '../src/hooks/useVideoModelCatalog';
 import { useVideoRouteCatalog } from '../src/hooks/useVideoRouteCatalog';
 import ImageModelIcon from './ImageModelIcon';

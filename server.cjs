@@ -277,6 +277,16 @@ const applyRoutePathTemplate = (template, params = {}) =>
   String(template || "").replace(/\{(\w+)\}/g, (_, key) =>
     encodeURIComponent(params[key] ?? ""),
   );
+const getCookieValue = (cookieHeader, name) => {
+  const target = `${encodeURIComponent(name)}=`;
+  return (
+    String(cookieHeader || "")
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(target))
+      ?.slice(target.length) || ""
+  );
+};
 const buildRouteUrl = (route, template, params = {}) =>
   `${trimTrailingSlash(route.baseUrl)}${applyRoutePathTemplate(template, params)}`;
 const buildImageTaskToken = (routeId, upstreamTaskId) =>
@@ -1825,6 +1835,14 @@ app.use(async (req, _res, next) => {
     ).trim();
     if (!req.headers["x-auth-session"] && bodySessionToken) {
       req.headers["x-auth-session"] = bodySessionToken;
+    }
+    if (!req.headers["x-auth-session"]) {
+      const cookieSessionToken = decodeURIComponent(
+        getCookieValue(req.headers.cookie, "auth-session-v1"),
+      ).trim();
+      if (cookieSessionToken) {
+        req.headers["x-auth-session"] = cookieSessionToken;
+      }
     }
     req.authUser = await getSessionUserFromRequest(req);
   } catch (error) {
@@ -4289,6 +4307,7 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
           routeId: route.id,
           hasHeaderSession: Boolean(req.headers["x-auth-session"]),
           hasBodySession: Boolean(req.body?.authSessionToken || req.body?.auth_session_token),
+          hasCookieSession: Boolean(getCookieValue(req.headers.cookie, "auth-session-v1")),
         });
       }
       billingAccount = await requireBillingAccount(req);

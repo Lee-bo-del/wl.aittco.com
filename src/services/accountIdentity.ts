@@ -58,6 +58,36 @@ const canUseStorage = () =>
 const canUseSessionStorage = () =>
   typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
 
+const canUseDocumentCookie = () =>
+  typeof document !== 'undefined' && typeof document.cookie === 'string';
+
+const getCookieValue = (name: string): string | null => {
+  if (!canUseDocumentCookie()) return null;
+  const prefix = `${encodeURIComponent(name)}=`;
+  const item = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+  if (!item) return null;
+  const value = item.slice(prefix.length);
+  return value ? decodeURIComponent(value) : null;
+};
+
+const setSessionCookie = (sessionToken: string) => {
+  if (!canUseDocumentCookie()) return;
+  const maxAge = 30 * 24 * 60 * 60;
+  document.cookie = `${encodeURIComponent(STORAGE_KEY)}=${encodeURIComponent(
+    sessionToken,
+  )}; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+};
+
+const clearSessionCookie = () => {
+  if (!canUseDocumentCookie()) return;
+  document.cookie = `${encodeURIComponent(
+    STORAGE_KEY,
+  )}=; Path=/; Max-Age=0; SameSite=Lax`;
+};
+
 const emitAuthSessionChange = () => {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new Event(AUTH_SESSION_CHANGE_EVENT));
@@ -86,6 +116,7 @@ export const getStoredAuthSessionToken = (): string | null => {
     if (legacyValue && legacyValue.trim()) {
       const normalized = legacyValue.trim();
       window.localStorage.setItem(STORAGE_KEY, normalized);
+      setSessionCookie(normalized);
       return normalized;
     }
   }
@@ -97,9 +128,17 @@ export const getStoredAuthSessionToken = (): string | null => {
       if (sessionValue && sessionValue.trim()) {
         const normalized = sessionValue.trim();
         window.localStorage.setItem(STORAGE_KEY, normalized);
+        setSessionCookie(normalized);
         return normalized;
       }
     }
+  }
+
+  const cookieValue = getCookieValue(STORAGE_KEY);
+  if (cookieValue && cookieValue.trim()) {
+    const normalized = cookieValue.trim();
+    window.localStorage.setItem(STORAGE_KEY, normalized);
+    return normalized;
   }
 
   return null;
@@ -108,12 +147,14 @@ export const getStoredAuthSessionToken = (): string | null => {
 export const setStoredAuthSessionToken = (sessionToken: string) => {
   if (!canUseStorage()) return;
   window.localStorage.setItem(STORAGE_KEY, sessionToken);
+  setSessionCookie(sessionToken);
   emitAuthSessionChange();
 };
 
 export const clearStoredAuthSessionToken = () => {
   if (!canUseStorage()) return;
   window.localStorage.removeItem(STORAGE_KEY);
+  clearSessionCookie();
   emitAuthSessionChange();
 };
 
