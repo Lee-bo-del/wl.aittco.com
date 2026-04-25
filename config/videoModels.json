@@ -29,7 +29,7 @@
       "routeFamily": "grok-video-3",
       "requestModel": "grok-video-3",
       "selectorCost": 12.5,
-      "maxReferenceImages": 1,
+      "maxReferenceImages": 10,
       "referenceLabels": [],
       "defaultAspectRatio": "1:1",
       "aspectRatioOptions": ["16:9", "9:16", "2:3", "3:2", "1:1"],

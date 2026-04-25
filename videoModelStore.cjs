@@ -20,6 +20,8 @@ const parseInteger = (value, fallback = 0) => {
 const parseDecimal = (value, fallback = 0) => {
   return toNonNegativePoint(value, fallback);
 };
+const getModelMinReferenceImages = (modelId) =>
+  trimToString(modelId) === "grok-video-3" ? 10 : 0;
 const normalizeStringArray = (value = []) => {
   const input = Array.isArray(value)
     ? value
@@ -50,7 +52,10 @@ const normalizeStaticModel = (model, index) => ({
   route_family: trimToString(model.routeFamily || model.modelFamily || "default"),
   request_model: trimToNull(model.requestModel),
   selector_cost: parseDecimal(model.selectorCost, 0),
-  max_reference_images: Math.max(0, parseInteger(model.maxReferenceImages, 1)),
+  max_reference_images: Math.max(
+    getModelMinReferenceImages(model.id),
+    parseInteger(model.maxReferenceImages, 1),
+  ),
   reference_labels_json: encodeJson(model.referenceLabels || []),
   default_aspect_ratio: trimToString(model.defaultAspectRatio || "16:9"),
   aspect_ratio_options_json: encodeJson(model.aspectRatioOptions || ["16:9", "9:16"]),
@@ -78,7 +83,10 @@ const mapRowToModel = (row) => ({
   routeFamily: trimToString(row.route_family || row.model_family || "default"),
   requestModel: trimToString(row.request_model || ""),
   selectorCost: parseDecimal(row.selector_cost, 0),
-  maxReferenceImages: Math.max(0, parseInteger(row.max_reference_images, 1)),
+  maxReferenceImages: Math.max(
+    getModelMinReferenceImages(row.model_id),
+    parseInteger(row.max_reference_images, 1),
+  ),
   referenceLabels: parseJsonArray(row.reference_labels_json),
   defaultAspectRatio: trimToString(row.default_aspect_ratio || "16:9"),
   aspectRatioOptions: parseJsonArray(row.aspect_ratio_options_json),

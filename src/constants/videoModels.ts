@@ -5,7 +5,7 @@
   'veo3.1-pro-4k': { max: 2, labels: ['\u9996\u5E27', '\u5C3E\u5E27'] },
   'veo3.1-components': { max: 3, labels: [] },
   'veo3.1-fast-components-4K': { max: 3, labels: [] },
-  'grok-video-3': { max: 1, labels: [] },
+  'grok-video-3': { max: 10, labels: [] },
 
   // Legacy aliases for backward compatibility
   'veo3.1-4k': { max: 2, labels: ['\u9996\u5E27', '\u5C3E\u5E27'] },

@@ -267,7 +267,7 @@ export const generateVideo = async (
         payload.duration = parseInt(options.duration, 10);
       }
       if (images && images.length > 0) {
-        payload.images = [images[0]];
+        payload.images = images;
       }
     } else {
       Object.assign(payload, options);
