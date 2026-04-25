@@ -284,6 +284,11 @@ export const generateVideo = async (
       }
     }
 
+    const sessionToken = getStoredAuthSessionToken();
+    if (sessionToken) {
+      payload.authSessionToken = sessionToken;
+    }
+
     const response = await axios.post(`${API_BASE_URL}/video/generate`, payload, {
       headers: buildVideoRequestHeaders(apiKey),
     });

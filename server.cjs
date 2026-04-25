@@ -1820,6 +1820,12 @@ app.use(cors());
 app.use(express.json({ limit: "20mb" })); // Guard against oversized Base64 payloads causing OOM.
 app.use(async (req, _res, next) => {
   try {
+    const bodySessionToken = String(
+      req.body?.authSessionToken || req.body?.auth_session_token || "",
+    ).trim();
+    if (!req.headers["x-auth-session"] && bodySessionToken) {
+      req.headers["x-auth-session"] = bodySessionToken;
+    }
     req.authUser = await getSessionUserFromRequest(req);
   } catch (error) {
     console.error("[Auth] Session middleware error:", error.message);
@@ -4266,6 +4272,8 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
     delete requestBody.routeId;
     delete requestBody.modelId;
     delete requestBody.uiMode;
+    delete requestBody.authSessionToken;
+    delete requestBody.auth_session_token;
     requestBody.model = getRouteModelName(
       route,
       requestBody,
@@ -4276,6 +4284,13 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
     const shouldUseBilling = !useUserProvidedApiKey;
     const pointCost = shouldUseBilling ? getRoutePointCost(route, 1, requestBody) : 0;
     if (shouldUseBilling) {
+      if (!req.authUser?.userId) {
+        console.warn("[Video Generate] Missing billing session", {
+          routeId: route.id,
+          hasHeaderSession: Boolean(req.headers["x-auth-session"]),
+          hasBodySession: Boolean(req.body?.authSessionToken || req.body?.auth_session_token),
+        });
+      }
       billingAccount = await requireBillingAccount(req);
       chargeRouteId = route.id;
     }
