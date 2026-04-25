@@ -4248,6 +4248,10 @@ app.post("/api/gemini/generate", generateLimiter, async (req, res) => {
 });
 // ==================== Video Generation ====================
 app.post("/api/video/generate", generateLimiter, async (req, res) => {
+  let billingAccount = null;
+  let billingCharge = null;
+  let localTaskId = null;
+  let chargeRouteId = null;
   let generationRecord = null;
   try {
     const fallbackAuthorization = req.headers["authorization"];
@@ -4268,10 +4272,13 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
       requestedVideoModel?.requestModel || requestBody.model,
     );
 
-    const useUserProvidedApiKey = shouldUseUserProvidedApiKey(
-      route,
-      fallbackAuthorization,
-    );
+    const useUserProvidedApiKey = shouldUseUserProvidedApiKey(route, fallbackAuthorization);
+    const shouldUseBilling = !useUserProvidedApiKey;
+    const pointCost = shouldUseBilling ? getRoutePointCost(route, 1, requestBody) : 0;
+    if (shouldUseBilling) {
+      billingAccount = await requireBillingAccount(req);
+      chargeRouteId = route.id;
+    }
     const userKey = getRouteAuthorization(route, fallbackAuthorization, {
       preferUserProvided: useUserProvidedApiKey,
     });
@@ -4331,7 +4338,7 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
 
     generationRecord = await buildGenerationRecordPayload({
       req,
-      billingAccount: null,
+      billingAccount,
       mediaType: "VIDEO",
       actionName: "video_generate",
       prompt: requestBody.prompt,
@@ -4349,6 +4356,15 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
         duration: requestBody.duration || null,
       },
     });
+    if (shouldUseBilling) {
+      billingCharge = await reservePoints(billingAccount.accountId, pointCost, {
+        action: "video_generate",
+        routeId: route.id,
+        mode: route.mode,
+        model: requestBody.model,
+        modelId: requestedVideoModel?.id || null,
+      });
+    }
 
     const isGeminiVideoRoute =
       route?.transport === "gemini-native" || isGeminiNativeStylePath(route);
@@ -4406,6 +4422,14 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
         status: proxiedResponseData?.status || "succeeded",
         url: proxiedResponseData?.url || immediateUrl,
         video_url: proxiedResponseData?.video_url || immediateUrl,
+        ...(shouldUseBilling
+          ? {
+              billing: {
+                deductedPoints: pointCost,
+                remainingPoints: billingCharge?.account?.points,
+              },
+            }
+          : {}),
       });
     }
 
@@ -4418,9 +4442,18 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
       proxiedResponseData?.data?.name;
 
     if (upstreamTaskId) {
-      const localTaskId = buildVideoTaskToken(route.id, upstreamTaskId);
+      localTaskId = buildVideoTaskToken(route.id, upstreamTaskId);
       if (generationRecord?.id) {
         await attachTaskToGenerationRecord(generationRecord.id, localTaskId);
+      }
+      if (shouldUseBilling) {
+        await registerPendingTask(localTaskId, {
+          accountId: billingAccount.accountId,
+          chargeId: billingCharge?.chargeId || null,
+          points: pointCost,
+          routeId: route.id,
+          action: "video_generate",
+        });
       }
       const normalizedResponse = {
         ...response.data,
@@ -4432,6 +4465,12 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
         normalizedResponse.data = {
           ...normalizedResponse.data,
           task_id: localTaskId,
+        };
+      }
+      if (shouldUseBilling) {
+        normalizedResponse.billing = {
+          deductedPoints: pointCost,
+          remainingPoints: billingCharge?.account?.points,
         };
       }
 
@@ -4452,10 +4491,27 @@ app.post("/api/video/generate", generateLimiter, async (req, res) => {
       },
     });
 
-    res.json(response.data);
+    res.json(
+      shouldUseBilling
+        ? {
+            ...response.data,
+            billing: {
+              deductedPoints: pointCost,
+              remainingPoints: billingCharge?.account?.points,
+            },
+          }
+        : response.data,
+    );
   } catch (error) {
+    if (billingCharge?.chargeId && billingAccount?.accountId && !localTaskId) {
+      await refundPoints(billingAccount.accountId, billingCharge.chargeId, {
+        reason: "request_failed",
+        routeId: chargeRouteId,
+      });
+    }
     await completeGenerationRecordFailureSafe({
       recordId: generationRecord?.id,
+      taskId: localTaskId || null,
       errorMessage: error.message,
     });
     console.error("[Video Generate] Error:", error.message);
@@ -4528,6 +4584,7 @@ app.get("/api/video/task/:taskId", pollingLimiter, async (req, res) => {
     );
     const taskStatus = extractResultStatus(proxiedResponseData);
     if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
+      await settlePendingTask(encodedTaskId, "SUCCESS");
       await completeGenerationRecordSuccessSafe({
         taskId: encodedTaskId,
         resultUrls: extractResultUrlsFromPayload(proxiedResponseData),
@@ -4537,6 +4594,7 @@ app.get("/api/video/task/:taskId", pollingLimiter, async (req, res) => {
         },
       });
     } else if (["FAILURE", "FAILED"].includes(taskStatus)) {
+      await settlePendingTask(encodedTaskId, "FAILED");
       await completeGenerationRecordFailureSafe({
         taskId: encodedTaskId,
         errorMessage:
