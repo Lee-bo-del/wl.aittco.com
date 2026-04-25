@@ -12,6 +12,17 @@ const buildOptionalSessionHeaders = (): Record<string, string> => {
   return sessionToken ? buildBillingIdentityHeaders(sessionToken) : {};
 };
 
+const buildVideoRequestHeaders = (apiKey: string): Record<string, string> => {
+  const headers: Record<string, string> = {
+    ...buildOptionalSessionHeaders(),
+  };
+  const normalizedKey = String(apiKey || '').trim();
+  if (normalizedKey) {
+    headers.Authorization = normalizedKey;
+  }
+  return headers;
+};
+
 export const normalizeVideoDeliveryUrl = (value: string): string => {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -111,10 +122,7 @@ export const pollVideoTask = async (
 
       try {
         const pollRes = await axios.get(`${API_BASE_URL}/video/task/${taskId}`, {
-          headers: {
-            ...buildOptionalSessionHeaders(),
-            Authorization: apiKey,
-          },
+          headers: buildVideoRequestHeaders(apiKey),
         });
 
         const task = pollRes.data;
@@ -277,10 +285,7 @@ export const generateVideo = async (
     }
 
     const response = await axios.post(`${API_BASE_URL}/video/generate`, payload, {
-      headers: {
-        ...buildOptionalSessionHeaders(),
-        Authorization: apiKey,
-      },
+      headers: buildVideoRequestHeaders(apiKey),
     });
 
     const immediateOutputUrl = extractVideoOutputUrl(response?.data);
